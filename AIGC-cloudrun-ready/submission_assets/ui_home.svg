@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="860" height="1560" viewBox="0 0 860 1560">
+<defs>
+  <linearGradient id="bgGrad" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0%" stop-color="#EAF4FF"/>
+    <stop offset="100%" stop-color="#F7FBFF"/>
+  </linearGradient>
+</defs>
+<rect x="0" y="0" width="860" height="1560" rx="0" fill="url(#bgGrad)" />
+<rect x="70" y="50" width="720" height="1460" rx="58" fill="#1C2430" />
+<rect x="95" y="92" width="670" height="1376" rx="44" fill="#F4F9FF" />
+<rect x="328" y="66" width="204" height="22" rx="10" fill="#131922" />
+<text x="430" y="140" font-family="Droid Sans Fallback, Microsoft YaHei, Noto Sans CJK SC, sans-serif" font-size="28" fill="#2F3440" font-weight="bold" text-anchor="middle">界面示意图 2</text>
+<text x="430" y="176" font-family="Droid Sans Fallback, Microsoft YaHei, Noto Sans CJK SC, sans-serif" font-size="15" fill="#6C7A89" font-weight="normal" text-anchor="middle">主任务主页与成长反馈入口</text>
+<rect x="120" y="214" width="620" height="170" rx="28" fill="#F7FBFF" stroke="#D9EAF7" stroke-width="2" />
+<text x="160" y="274" font-family="Droid Sans Fallback, Microsoft YaHei, Noto Sans CJK SC, sans-serif" font-size="34" fill="#2F3440" font-weight="bold" text-anchor="start">待办</text>
+<rect x="636" y="238" width="62" height="34" rx="16" fill="#DCEEFF" />
+<text x="667" y="261" font-family="Droid Sans Fallback, Microsoft YaHei, Noto Sans CJK SC, sans-serif" font-size="16" fill="#4F9EF0" font-weight="bold" text-anchor="middle">+</text>
+<text x="160" y="320" font-family="Droid Sans Fallback, Microsoft YaHei, Noto Sans CJK SC, sans-serif" font-size="16" fill="#6C7A89" font-weight="normal" text-anchor="start">当前章节：词海远征序章</text>
+<text x="160" y="350" font-family="Droid Sans Fallback, Microsoft YaHei, Noto Sans CJK SC, sans-serif" font-size="16" fill="#6C7A89" font-weight="normal" text-anchor="start">目标：30 天完成 CET-6 冲刺与词汇复盘</text>
+<rect x="120" y="416" width="620" height="150" rx="24" fill="#FFFFFF" stroke="#D9EAF7" stroke-width="2" />
+<text x="142" y="452" font-family="Droid Sans Fallback, Microsoft YaHei, Noto Sans CJK SC, sans-serif" font-size="22" fill="#2F3440" font-weight="bold" text-anchor="start">背诵 40 个高频词</text>
+<text x="142" y="486" font-family="Droid Sans Fallback, Microsoft YaHei, Noto Sans CJK SC, sans-serif" font-size="15" fill="#6C7A89" font-weight="normal" text-anchor="start"><tspan x="142" dy="0">从高频与真题词汇切入，先降低启动门槛，形成第一</tspan><tspan x="142" dy="21">轮推进。</tspan></text>
+<rect x="142" y="518" width="146" height="30" rx="16" fill="#DCEEFF" />
+<text x="215" y="539" font-family="Droid Sans Fallback, Microsoft YaHei, Noto Sans CJK SC, sans-serif" font-size="16" fill="#4F9EF0" font-weight="bold" text-anchor="middle">25 分钟</text>
+<rect x="580" y="518" width="138" height="30" rx="16" fill="#EEF8F1" />
+<text x="649" y="539" font-family="Droid Sans Fallback, Microsoft YaHei, Noto Sans CJK SC, sans-serif" font-size="16" fill="#69B98A" font-weight="bold" text-anchor="middle">奖励成长/资源</text>
+<rect x="120" y="588" width="620" height="150" rx="24" fill="#FFFFFF" stroke="#D9EAF7" stroke-width="2" />
+<text x="142" y="624" font-family="Droid Sans Fallback, Microsoft YaHei, Noto Sans CJK SC, sans-serif" font-size="22" fill="#2F3440" font-weight="bold" text-anchor="start">精读 1 篇阅读训练</text>
+<text x="142" y="658" font-family="Droid Sans Fallback, Microsoft YaHei, Noto Sans CJK SC, sans-serif" font-size="15" fill="#6C7A89" font-weight="normal" text-anchor="start"><tspan x="142" dy="0">把输入转化为语境理解，并为后续剧情反馈提供阶段</tspan><tspan x="142" dy="21">性证据。</tspan></text>
+<rect x="142" y="690" width="146" height="30" rx="16" fill="#DCEEFF" />
+<text x="215" y="711" font-family="Droid Sans Fallback, Microsoft YaHei, Noto Sans CJK SC, sans-serif" font-size="16" fill="#4F9EF0" font-weight="bold" text-anchor="middle">30 分钟</text>
+<rect x="580" y="690" width="138" height="30" rx="16" fill="#EEF8F1" />
+<text x="649" y="711" font-family="Droid Sans Fallback, Microsoft YaHei, Noto Sans CJK SC, sans-serif" font-size="16" fill="#69B98A" font-weight="bold" text-anchor="middle">奖励成长/资源</text>
+<rect x="120" y="760" width="620" height="150" rx="24" fill="#FFFFFF" stroke="#D9EAF7" stroke-width="2" />
+<text x="142" y="796" font-family="Droid Sans Fallback, Microsoft YaHei, Noto Sans CJK SC, sans-serif" font-size="22" fill="#2F3440" font-weight="bold" text-anchor="start">整理 5 道错题并复盘</text>
+<text x="142" y="830" font-family="Droid Sans Fallback, Microsoft YaHei, Noto Sans CJK SC, sans-serif" font-size="15" fill="#6C7A89" font-weight="normal" text-anchor="start"><tspan x="142" dy="0">通过输出与纠错完成闭环，把一次努力沉淀为可复用</tspan><tspan x="142" dy="21">经验。</tspan></text>
+<rect x="142" y="862" width="146" height="30" rx="16" fill="#DCEEFF" />
+<text x="215" y="883" font-family="Droid Sans Fallback, Microsoft YaHei, Noto Sans CJK SC, sans-serif" font-size="16" fill="#4F9EF0" font-weight="bold" text-anchor="middle">20 分钟</text>
+<rect x="580" y="862" width="138" height="30" rx="16" fill="#EEF8F1" />
+<text x="649" y="883" font-family="Droid Sans Fallback, Microsoft YaHei, Noto Sans CJK SC, sans-serif" font-size="16" fill="#69B98A" font-weight="bold" text-anchor="middle">奖励成长/资源</text>
+<rect x="120" y="938" width="620" height="110" rx="26" fill="#EEF5FC" stroke="#D9EAF7" stroke-width="2" />
+<text x="150" y="992" font-family="Droid Sans Fallback, Microsoft YaHei, Noto Sans CJK SC, sans-serif" font-size="18" fill="#6C7A89" font-weight="normal" text-anchor="start">完成任务后会生成剧情反馈、奖励结算与角色记忆</text>
+</svg>

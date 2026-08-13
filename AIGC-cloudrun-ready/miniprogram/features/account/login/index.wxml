@@ -1,0 +1,21 @@
+<view class="login-page">
+  <view class="login-hero">
+    <view class="login-emblem">✦</view>
+    <view class="page-title">欢迎归队</view>
+    <view class="page-subtitle">继续你的学习主线与角色旅程</view>
+  </view>
+  <view class="login-card card">
+    <view class="field">
+      <text class="field-label">登录账号</text>
+      <input class="field-control {{accountError ? 'has-error' : ''}}" value="{{account}}" placeholder="输入注册时的账号" bindinput="onAccountInput" />
+      <text class="error-text" wx:if="{{accountError}}">{{accountError}}</text>
+    </view>
+    <view class="field">
+      <text class="field-label">登录密码</text>
+      <input class="field-control {{passwordError ? 'has-error' : ''}}" value="{{password}}" password placeholder="输入密码" bindinput="onPasswordInput" confirm-type="done" bindconfirm="submit" />
+      <text class="error-text" wx:if="{{passwordError}}">{{passwordError}}</text>
+    </view>
+    <button class="primary-button submit" loading="{{loading}}" disabled="{{loading}}" bindtap="submit">登录</button>
+    <button class="register-link" bindtap="goRegister">还没有角色？注册新账号</button>
+  </view>
+</view>

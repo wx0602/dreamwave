@@ -1,0 +1,13 @@
+<view class="journal-page watercolor-page">
+  <view class="journal-header"><view class="page-title">角色日志</view><view class="page-subtitle">每一次推进，都在为你的角色补全记忆。</view></view>
+  <view class="journal-list">
+    <view class="empty card" wx:if="{{!loading && !diary.length}}">语境记录本已开启。完成第一个任务后，故事会出现在这里。</view>
+    <view class="diary-card card" wx:for="{{diary}}" wx:key="diaryId">
+      <view class="diary-top"><view class="diary-title">{{item.displayTitle}}</view><view class="memory-mark">MEMORY</view></view>
+      <view class="diary-body">{{item.displayBody}}</view><view class="diary-date">{{item.displayDate}}</view>
+      <view class="diary-actions"><button class="secondary-button small-button" data-suggestion="{{item.suggestion}}" bindtap="adopt">采纳为任务</button><button class="primary-button small-button" data-id="{{item.diaryId}}" bindtap="refresh">让 AI 重新建议</button></view>
+    </view>
+  </view>
+  <view class="syncing" wx:if="{{loading}}">正在读取角色记忆...</view>
+</view>
+<view class="modal-mask" wx:if="{{story}}"><view class="modal-card"><view class="modal-title">{{story.title}}</view><view class="modal-body">{{story.body}}</view><button class="primary-button small-button close-story" bindtap="closeStory">知道了</button></view></view>

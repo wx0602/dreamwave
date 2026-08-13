@@ -1,0 +1,9 @@
+const api=require("../../../services/api");const storage=require("../../../utils/storage");const {value,showError}=require("../../../utils/ui");
+Page({
+ data:{loading:true,progress:"",chapter:"夜幕章节",stateText:"等待进入",eventTitle:"副本事件准备中",eventDesc:"正在等待下一个节点。",choices:[],readyToSettle:false},
+ onShow(){this.load();},
+ async load(){this.setData({loading:true});try{const status=await api.getDungeonStatus(Boolean(storage.get(storage.KEYS.dungeonDemo,false)));this.render(status);}catch(error){showError(error,"副本事件加载失败");}finally{this.setData({loading:false});}},
+ render(status){const run=status.run;if(!run){this.setData({progress:"",chapter:"夜幕章节未开启",stateText:"等待重新进入",eventTitle:"副本尚未开启",eventDesc:"请返回副本入口重新进入。",choices:[],readyToSettle:false});return;}if(run.readyToSettle){this.setData({progress:`节点 ${Math.max(run.totalNodes,1)} / ${Math.max(run.totalNodes,1)}`,chapter:value(run.chapterTitle,value(run.lineName,"夜幕章节")),stateText:value(run.stateSummary,"路线状态待更新"),eventTitle:value(run.endingTitle,"副本已完成，可进行结算"),eventDesc:value(run.endingSummary,"你已完成全部事件节点，请点击结算。"),choices:[],readyToSettle:true});return;}const node=run.activeNode||{};this.setData({progress:`第 ${Math.min((run.currentIndex||0)+1,run.totalNodes||1)} 幕 / 共 ${run.totalNodes||1} 幕`,chapter:value(run.chapterTitle,value(run.lineName,"夜幕章节")),stateText:value(run.stateSummary,"路线状态待更新"),eventTitle:value(node.title,"副本事件"),eventDesc:value(node.description,"你走到了新的分岔路口。"),choices:node.choices||[],readyToSettle:false});},
+ async choose(e){if(this.data.loading)return;this.setData({loading:true});try{await api.resolveDungeonEvent(e.currentTarget.dataset.id);await this.load();}catch(error){showError(error,"事件结算失败");this.setData({loading:false});}},
+ settle(){wx.navigateTo({url:"/features/adventure/dungeon-settlement/index"});},back(){wx.navigateBack();}
+});

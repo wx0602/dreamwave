@@ -1,0 +1,8 @@
+.login-page { min-height: 100vh; padding: 80rpx 42rpx; background: radial-gradient(circle at 50% 0,#dceeff,#f4f9ff 48%); }
+.login-hero { text-align: center; }
+.login-emblem { display: flex; align-items: center; justify-content: center; width: 116rpx; height: 116rpx; margin: 0 auto 28rpx; border-radius: 34rpx; color: #fff; font-size: 56rpx; background: linear-gradient(145deg,#78c7ff,#677eea); box-shadow: 0 20rpx 42rpx rgba(79,158,240,.28); }
+.login-card { margin-top: 54rpx; padding: 44rpx 36rpx; }
+.has-error { border-color: #d98c8c; background: #fff8f8; }
+.error-text { display: block; margin: 10rpx 8rpx 0; color: #cf6b6b; font-size: 23rpx; }
+.submit { margin-top: 42rpx; }
+.register-link { margin-top: 22rpx; color: #4f9ef0; background: transparent; font-size: 26rpx; }

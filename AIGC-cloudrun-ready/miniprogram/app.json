@@ -1,0 +1,41 @@
+{
+  "pages": [
+    "pages/welcome/index",
+    "pages/home/index",
+    "pages/journal/index",
+    "pages/dungeon/index",
+    "pages/profile/index"
+  ],
+  "subpackages": [
+    {
+      "root": "features/account",
+      "pages": ["login/index", "role-select/index", "register/index", "entering/index", "init-result/index"]
+    },
+    {
+      "root": "features/adventure",
+      "pages": ["focus/index", "completion/index", "dungeon-run/index", "dungeon-settlement/index", "goal-map/index"]
+    }
+  ],
+  "window": {
+    "navigationBarTitleText": "任务织梦师",
+    "navigationBarBackgroundColor": "#F4F9FF",
+    "navigationBarTextStyle": "black",
+    "backgroundColor": "#F4F9FF",
+    "backgroundTextStyle": "dark"
+  },
+  "tabBar": {
+    "color": "#81909F",
+    "selectedColor": "#4F9EF0",
+    "backgroundColor": "#FFFFFF",
+    "borderStyle": "white",
+    "list": [
+      { "pagePath": "pages/home/index", "text": "首页", "iconPath": "assets/icons/home.png", "selectedIconPath": "assets/icons/home-active.png" },
+      { "pagePath": "pages/journal/index", "text": "日志", "iconPath": "assets/icons/journal.png", "selectedIconPath": "assets/icons/journal-active.png" },
+      { "pagePath": "pages/dungeon/index", "text": "副本", "iconPath": "assets/icons/dungeon.png", "selectedIconPath": "assets/icons/dungeon-active.png" },
+      { "pagePath": "pages/profile/index", "text": "我的", "iconPath": "assets/icons/profile.png", "selectedIconPath": "assets/icons/profile-active.png" }
+    ]
+  },
+  "style": "v2",
+  "lazyCodeLoading": "requiredComponents",
+  "sitemapLocation": "sitemap.json"
+}

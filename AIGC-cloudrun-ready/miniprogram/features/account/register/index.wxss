@@ -1,0 +1,16 @@
+.register-page { min-height: 100vh; padding: 38rpx 30rpx 70rpx; background: linear-gradient(160deg,#eef8ff 0%,#f9fcff 45%,#edf4ff 100%); }
+.register-header { display: flex; align-items: center; justify-content: space-between; padding: 18rpx 18rpx 34rpx; }
+.eyebrow { margin-bottom: 12rpx; color: #75aee3; font-size: 20rpx; font-weight: 800; letter-spacing: 3rpx; }
+.role-thumb { flex: none; width: 126rpx; height: 154rpx; margin-left: 20rpx; border: 6rpx solid #fff; border-radius: 32rpx; box-shadow: 0 16rpx 36rpx rgba(47,92,131,.18); }
+.register-card { padding: 38rpx 34rpx 44rpx; }
+.group-title { display: flex; align-items: center; font-size: 31rpx; font-weight: 700; }
+.group-number { display: inline-flex; align-items: center; justify-content: center; width: 48rpx; height: 48rpx; margin-right: 16rpx; border-radius: 16rpx; color: #fff; background: linear-gradient(135deg,#78c7ff,#6689e8); font-size: 20rpx; }
+.divider { height: 2rpx; margin: 38rpx 0; background: linear-gradient(90deg,transparent,#dceeff,transparent); }
+.error { display: block; margin: 8rpx 8rpx 0; color: #d27777; font-size: 22rpx; }
+.picker-row { display: flex; gap: 18rpx; margin-top: 24rpx; }
+.picker-cell { flex: 1; min-width: 0; }
+.picker-value { height: 88rpx; padding: 25rpx 20rpx; border: 2rpx solid #dceeff; border-radius: 24rpx; background: #f8fbff; color: #4f6070; text-align: center; }
+.security-note { display: flex; gap: 18rpx; margin-top: 36rpx; padding: 22rpx; border-radius: 24rpx; background: #eef8f6; }
+.security-icon { color: #69b98a; font-size: 40rpx; }
+.security-title { color: #4c8065; font-weight: 700; }
+.submit { margin-top: 38rpx; }

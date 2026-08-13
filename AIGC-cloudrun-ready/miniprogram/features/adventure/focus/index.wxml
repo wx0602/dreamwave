@@ -1,0 +1,10 @@
+<view class="focus-page">
+  <image class="focus-background" src="{{background}}" mode="aspectFill" />
+  <view class="focus-scrim"></view>
+  <view class="focus-content">
+    <view class="focus-panel"><view class="focus-mode">{{modeLabel}}</view><view class="focus-title">{{task.title}}</view><view class="focus-timer">{{timer}}</view><view class="focus-hint">{{hint}}</view></view>
+    <button class="pause-button" bindtap="pause">Ⅱ</button>
+  </view>
+</view>
+<view class="modal-mask" wx:if="{{pauseModal}}"><view class="modal-card focus-modal"><view class="modal-title">是否休息</view><view class="modal-body">小憩，是为了更好的开始</view><view class="focus-actions"><button class="primary-button small-button" bindtap="rest">休息 5 分钟</button><button class="secondary-button small-button" bindtap="resume">继续专注</button><button class="secondary-button small-button" bindtap="finish">提前完成</button><button class="danger-button small-button" bindtap="abandon">放弃任务</button></view></view></view>
+<view class="modal-mask" wx:if="{{restDoneModal}}"><view class="modal-card focus-modal"><view class="modal-title">休息时间已结束</view><view class="modal-body">是否继续专注？</view><view class="modal-actions"><button class="primary-button small-button" bindtap="resumeFocus">继续专注</button><button class="danger-button small-button" bindtap="abandon">放弃任务</button></view></view></view>

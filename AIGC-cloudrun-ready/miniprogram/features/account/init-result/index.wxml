@@ -1,0 +1,13 @@
+<view class="result-page watercolor-page">
+  <view class="page-pad">
+    <view class="result-heading"><view class="tag">WORLD ARCHIVE</view><view class="page-title">世界入口已开启</view><view class="page-subtitle">你的学习目标已被写入新的冒险章节</view></view>
+    <view class="agent-card glass-card">
+      <view class="agent-orb">✦</view><view><view class="agent-label">专属 Agent</view><view class="agent-name">{{agentName}}</view><view class="chapter">{{chapter}}</view></view>
+    </view>
+    <view class="story card"><view class="section-heading">开篇叙事</view><view class="story-body">{{narrative}}</view></view>
+    <view class="world card"><view class="section-heading">冒险档案</view><view class="info"><text>世界</text><text>{{world}}</text></view><view class="info"><text>目标</text><text>{{goal}}</text></view></view>
+    <view class="section-title">初始任务</view>
+    <view class="task-line" wx:for="{{tasks}}" wx:key="taskId"><text class="task-dot">✦</text><text>{{item.title}}</text></view>
+    <button class="primary-button enter" bindtap="enter">进入冒险</button>
+  </view>
+</view>

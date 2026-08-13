@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="860" height="1560" viewBox="0 0 860 1560">
+<defs>
+  <linearGradient id="bgGrad" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0%" stop-color="#EAF4FF"/>
+    <stop offset="100%" stop-color="#F7FBFF"/>
+  </linearGradient>
+</defs>
+<rect x="0" y="0" width="860" height="1560" rx="0" fill="url(#bgGrad)" />
+<rect x="70" y="50" width="720" height="1460" rx="58" fill="#1C2430" />
+<rect x="95" y="92" width="670" height="1376" rx="44" fill="#F4F9FF" />
+<rect x="328" y="66" width="204" height="22" rx="10" fill="#131922" />
+<text x="430" y="140" font-family="Droid Sans Fallback, Microsoft YaHei, Noto Sans CJK SC, sans-serif" font-size="28" fill="#2F3440" font-weight="bold" text-anchor="middle">界面示意图 1</text>
+<text x="430" y="176" font-family="Droid Sans Fallback, Microsoft YaHei, Noto Sans CJK SC, sans-serif" font-size="15" fill="#6C7A89" font-weight="normal" text-anchor="middle">角色建档与目标初始化页</text>
+<rect x="158" y="216" width="130" height="38" rx="16" fill="#DCEEFF" />
+<text x="223" y="241" font-family="Droid Sans Fallback, Microsoft YaHei, Noto Sans CJK SC, sans-serif" font-size="16" fill="#4F9EF0" font-weight="bold" text-anchor="middle">初始化信息</text>
+<text x="430" y="306" font-family="Droid Sans Fallback, Microsoft YaHei, Noto Sans CJK SC, sans-serif" font-size="32" fill="#2F3440" font-weight="bold" text-anchor="middle">填写初始化信息</text>
+<text x="430" y="346" font-family="Droid Sans Fallback, Microsoft YaHei, Noto Sans CJK SC, sans-serif" font-size="16" fill="#6C7A89" font-weight="normal" text-anchor="middle">补充目标、角色与投入节奏，开始创建冒险档案</text>
+<rect x="135" y="388" width="590" height="760" rx="28" fill="#FFFFFF" stroke="#D9EAF7" stroke-width="2" />
+<text x="170" y="438" font-family="Droid Sans Fallback, Microsoft YaHei, Noto Sans CJK SC, sans-serif" font-size="15" fill="#6C7A89" font-weight="normal" text-anchor="start">登录账号</text>
+<rect x="170" y="448" width="520" height="58" rx="16" fill="#EEF5FC" />
+<text x="188" y="485" font-family="Droid Sans Fallback, Microsoft YaHei, Noto Sans CJK SC, sans-serif" font-size="17" fill="#9AA6B2" font-weight="normal" text-anchor="start">study_runner</text>
+<text x="170" y="552" font-family="Droid Sans Fallback, Microsoft YaHei, Noto Sans CJK SC, sans-serif" font-size="15" fill="#6C7A89" font-weight="normal" text-anchor="start">登录密码</text>
+<rect x="170" y="562" width="520" height="58" rx="16" fill="#EEF5FC" />
+<text x="188" y="599" font-family="Droid Sans Fallback, Microsoft YaHei, Noto Sans CJK SC, sans-serif" font-size="17" fill="#9AA6B2" font-weight="normal" text-anchor="start">••••••••</text>
+<text x="170" y="666" font-family="Droid Sans Fallback, Microsoft YaHei, Noto Sans CJK SC, sans-serif" font-size="15" fill="#6C7A89" font-weight="normal" text-anchor="start">昵称</text>
+<rect x="170" y="676" width="520" height="58" rx="16" fill="#EEF5FC" />
+<text x="188" y="713" font-family="Droid Sans Fallback, Microsoft YaHei, Noto Sans CJK SC, sans-serif" font-size="17" fill="#9AA6B2" font-weight="normal" text-anchor="start">林舟</text>
+<text x="170" y="780" font-family="Droid Sans Fallback, Microsoft YaHei, Noto Sans CJK SC, sans-serif" font-size="15" fill="#6C7A89" font-weight="normal" text-anchor="start">短期学习目标</text>
+<rect x="170" y="790" width="520" height="58" rx="16" fill="#EEF5FC" />
+<text x="188" y="827" font-family="Droid Sans Fallback, Microsoft YaHei, Noto Sans CJK SC, sans-serif" font-size="17" fill="#9AA6B2" font-weight="normal" text-anchor="start">30 天完成 CET-6 冲刺与词汇复盘</text>
+<text x="170" y="894" font-family="Droid Sans Fallback, Microsoft YaHei, Noto Sans CJK SC, sans-serif" font-size="15" fill="#6C7A89" font-weight="normal" text-anchor="start">截止时间</text>
+<rect x="170" y="904" width="250" height="58" rx="16" fill="#EEF5FC" />
+<text x="188" y="941" font-family="Droid Sans Fallback, Microsoft YaHei, Noto Sans CJK SC, sans-serif" font-size="17" fill="#9AA6B2" font-weight="normal" text-anchor="start">30 天后</text>
+<text x="440" y="894" font-family="Droid Sans Fallback, Microsoft YaHei, Noto Sans CJK SC, sans-serif" font-size="15" fill="#6C7A89" font-weight="normal" text-anchor="start">每日可投入时长</text>
+<rect x="440" y="904" width="250" height="58" rx="16" fill="#EEF5FC" />
+<text x="458" y="941" font-family="Droid Sans Fallback, Microsoft YaHei, Noto Sans CJK SC, sans-serif" font-size="17" fill="#9AA6B2" font-weight="normal" text-anchor="start">2 小时</text>
+<text x="170" y="1018" font-family="Droid Sans Fallback, Microsoft YaHei, Noto Sans CJK SC, sans-serif" font-size="15" fill="#6C7A89" font-weight="normal" text-anchor="start">角色模板</text>
+<rect x="170" y="1034" width="146" height="36" rx="16" fill="#EEF5FC" />
+<text x="243" y="1058" font-family="Droid Sans Fallback, Microsoft YaHei, Noto Sans CJK SC, sans-serif" font-size="16" fill="#4F9EF0" font-weight="bold" text-anchor="middle">守望骑士</text>
+<rect x="332" y="1034" width="146" height="36" rx="16" fill="#6FB6FF" />
+<text x="405" y="1058" font-family="Droid Sans Fallback, Microsoft YaHei, Noto Sans CJK SC, sans-serif" font-size="16" fill="#FFFFFF" font-weight="bold" text-anchor="middle">奥术学者</text>
+<rect x="494" y="1034" width="146" height="36" rx="16" fill="#EEF5FC" />
+<text x="567" y="1058" font-family="Droid Sans Fallback, Microsoft YaHei, Noto Sans CJK SC, sans-serif" font-size="16" fill="#4F9EF0" font-weight="bold" text-anchor="middle">荒野旅人</text>
+<rect x="170" y="1088" width="520" height="62" rx="22" fill="#6FB6FF" />
+<text x="430" y="1126" font-family="Droid Sans Fallback, Microsoft YaHei, Noto Sans CJK SC, sans-serif" font-size="20" fill="#FFFFFF" font-weight="bold" text-anchor="middle">确认初始化</text>
+</svg>

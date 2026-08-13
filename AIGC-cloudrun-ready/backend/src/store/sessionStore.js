@@ -1,0 +1,305 @@
+const fs = require("fs");
+const path = require("path");
+
+const env = require("../config/env");
+const { defaultShop } = require("../constants/shop");
+const { clone } = require("../utils/clone");
+const { createEmptyMemoryTree } = require("../services/memoryTreeService");
+const { createEmptyWorldState } = require("../services/worldStateService");
+const { getDeepseekApiKey } = require("./runtimeSecrets");
+const { saveAccountSnapshot } = require("./accountStore");
+
+function createEmptyState() {
+  return {
+    meta: {
+      nextId: 1,
+      version: 4,
+      updatedAt: new Date().toISOString(),
+    },
+    initialized: false,
+    selectedRoleId: "scholar",
+    profile: null,
+    stats: {
+      level: 3,
+      growth: 58,
+      nextLevel: 100,
+      resources: 92,
+      streak: 4,
+    },
+    agent: null,
+    openingNarrative: null,
+    lastStory: null,
+    lastRewardSummary: null,
+    tasks: [],
+    goalPlan: null,
+    nextSuggestion: null,
+    diary: [],
+    memories: [],
+    skillState: {
+      unlockedSkillIds: [],
+      lastTriggeredSkillIds: [],
+      activationCount: 0,
+      lastTriggeredAt: null,
+    },
+    overdueState: {
+      maxOverdueDays: 0,
+      lastNarrativeOverdueDays: 0,
+      lastNarrativeTaskId: null,
+      pendingNarrative: null,
+    },
+    dungeon: {
+      roleId: null,
+      baseStats: {
+        hp: 0,
+        attack: 0,
+        defense: 0,
+        shield: 0,
+      },
+      temporaryBuffs: {
+        hp: 0,
+        attack: 0,
+        defense: 0,
+        shield: 0,
+      },
+    },
+    dungeonRun: {
+      active: false,
+      runId: null,
+      startedAt: null,
+      currentIndex: 0,
+      totalNodes: 0,
+      storylineId: null,
+      lineName: null,
+      chapterTitle: null,
+      stateLabels: null,
+      currentEventId: null,
+      visitedEventIds: [],
+      history: [],
+      flags: [],
+      routeState: {
+        insight: 0,
+        bond: 0,
+        resolve: 0,
+      },
+      totals: {
+        growth: 0,
+        resources: 0,
+      },
+      readyToSettle: false,
+      settled: false,
+      endingSummary: null,
+      preparedEnding: null,
+      recentOutcome: null,
+    },
+    inventory: [],
+    shop: defaultShop.map((item) => ({ ...item })),
+    transition: {
+      needsNewGoalPrompt: false,
+      promptVersion: 0,
+    },
+    memoryTree: createEmptyMemoryTree(),
+    worldState: createEmptyWorldState(),
+  };
+}
+
+let state = null;
+
+function ensureRuntimeDir() {
+  fs.mkdirSync(env.runtimeDir, { recursive: true });
+  fs.mkdirSync(env.agentsDir, { recursive: true });
+  fs.mkdirSync(env.accountsDir, { recursive: true });
+}
+
+function clearDirectoryPreserveGitkeep(dirPath) {
+  if (!fs.existsSync(dirPath)) {
+    return;
+  }
+
+  const entries = fs.readdirSync(dirPath, { withFileTypes: true });
+  for (const entry of entries) {
+    if (entry.name === ".gitkeep") {
+      continue;
+    }
+
+    const targetPath = path.join(dirPath, entry.name);
+    fs.rmSync(targetPath, { recursive: true, force: true });
+  }
+}
+
+function loadStore() {
+  if (state) {
+    return state;
+  }
+
+  ensureRuntimeDir();
+
+  if (fs.existsSync(env.storeFile)) {
+    state = JSON.parse(fs.readFileSync(env.storeFile, "utf8"));
+  } else {
+    state = createEmptyState();
+    saveStore();
+  }
+
+  if (!Array.isArray(state.memories)) {
+    state.memories = [];
+  }
+  if (!state.meta) {
+    state.meta = {
+      nextId: 1,
+      version: 4,
+      updatedAt: new Date().toISOString(),
+    };
+  }
+  if (!state.skillState) {
+    state.skillState = {
+      unlockedSkillIds: [],
+      lastTriggeredSkillIds: [],
+      activationCount: 0,
+      lastTriggeredAt: null,
+    };
+  }
+  if (!state.dungeon) {
+    state.dungeon = {
+      roleId: null,
+      baseStats: {
+        hp: 0,
+        attack: 0,
+        defense: 0,
+        shield: 0,
+      },
+      temporaryBuffs: {
+        hp: 0,
+        attack: 0,
+        defense: 0,
+        shield: 0,
+      },
+    };
+  }
+  if (!state.memoryTree) {
+    state.memoryTree = createEmptyMemoryTree();
+  }
+  if (!state.worldState) {
+    state.worldState = createEmptyWorldState();
+  }
+  if (!state.dungeonRun) {
+    state.dungeonRun = {
+      active: false,
+      runId: null,
+      startedAt: null,
+      currentIndex: 0,
+      totalNodes: 0,
+      storylineId: null,
+      lineName: null,
+      chapterTitle: null,
+      stateLabels: null,
+      currentEventId: null,
+      visitedEventIds: [],
+      history: [],
+      flags: [],
+      routeState: {
+        insight: 0,
+        bond: 0,
+        resolve: 0,
+      },
+      totals: {
+        growth: 0,
+        resources: 0,
+      },
+      readyToSettle: false,
+      settled: false,
+      endingSummary: null,
+      preparedEnding: null,
+      recentOutcome: null,
+    };
+  }
+
+  return state;
+}
+
+function saveStore() {
+  ensureRuntimeDir();
+  state.meta.updatedAt = new Date().toISOString();
+  fs.writeFileSync(env.storeFile, JSON.stringify(state, null, 2), "utf8");
+
+  if (state.profile && state.profile.userId) {
+    saveAccountSnapshot({
+      userId: state.profile.userId,
+      state,
+      apiKey: getDeepseekApiKey(),
+    });
+  }
+}
+
+function getState() {
+  return loadStore();
+}
+
+function getStateSnapshot() {
+  return clone(loadStore());
+}
+
+function replaceState(nextState) {
+  state = nextState;
+  saveStore();
+  return state;
+}
+
+function updateState(mutator) {
+  const current = loadStore();
+  const result = mutator(current) || current;
+  replaceState(result);
+  return result;
+}
+
+function createId(prefix) {
+  const current = loadStore();
+  current.meta.nextId += 1;
+  saveStore();
+  return `${prefix}-${current.meta.nextId}`;
+}
+
+function resetStore() {
+  state = createEmptyState();
+  saveStore();
+  return state;
+}
+
+function destroyRuntimeCache() {
+  ensureRuntimeDir();
+  if (fs.existsSync(env.storeFile)) {
+    fs.rmSync(env.storeFile, { force: true });
+  }
+  clearDirectoryPreserveGitkeep(env.agentsDir);
+  state = null;
+}
+
+function initializeFreshRuntime() {
+  destroyRuntimeCache();
+  state = createEmptyState();
+  saveStore();
+  return state;
+}
+
+function initializeRuntime() {
+  return loadStore();
+}
+
+function getAgentDir(agentId) {
+  return path.join(env.agentsDir, agentId);
+}
+
+module.exports = {
+  createEmptyState,
+  loadStore,
+  saveStore,
+  getState,
+  getStateSnapshot,
+  replaceState,
+  updateState,
+  createId,
+  resetStore,
+  destroyRuntimeCache,
+  initializeFreshRuntime,
+  initializeRuntime,
+  getAgentDir,
+};

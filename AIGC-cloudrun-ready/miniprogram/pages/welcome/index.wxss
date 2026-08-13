@@ -1,0 +1,11 @@
+.welcome-page { min-height: 100vh; background: linear-gradient(180deg,#f4f9ff 0%,#edf7ff 100%); }
+.welcome-content { min-height: 100vh; padding: 90rpx 56rpx 70rpx; text-align: center; }
+.welcome-image { width: 480rpx; height: 480rpx; border-radius: 50%; box-shadow: 0 28rpx 80rpx rgba(79,158,240,.15); }
+.welcome-badge { display: inline-block; margin-top: 42rpx; padding: 12rpx 26rpx; border-radius: 999rpx; color: #4f9ef0; background: #e9f5ff; font-size: 23rpx; font-weight: 700; letter-spacing: 2rpx; }
+.welcome-title { min-height: 64rpx; margin-top: 32rpx; color: #2f3440; font-size: 48rpx; font-weight: 700; }
+.welcome-subtitle { min-height: 96rpx; margin-top: 22rpx; color: #6c7a89; font-size: 29rpx; line-height: 1.7; }
+.cursor { color: #6fb6ff; animation: blink .8s step-end infinite; }
+.welcome-actions { margin-top: 78rpx; opacity: 0; transform: translateY(22rpx); pointer-events: none; transition: all .45s ease; }
+.welcome-actions.is-ready { opacity: 1; transform: none; pointer-events: auto; }
+.login-button { margin-top: 24rpx; }
+@keyframes blink { 50% { opacity: 0; } }

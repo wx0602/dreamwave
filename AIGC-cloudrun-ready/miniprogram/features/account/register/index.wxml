@@ -1,0 +1,25 @@
+<view class="register-page">
+  <view class="register-header">
+    <view>
+      <view class="eyebrow">CREATE YOUR STORY</view>
+      <view class="page-title">初始化角色与目标</view>
+      <view class="page-subtitle">你的现实计划，将成为下一段冒险主线。</view>
+    </view>
+    <image class="role-thumb" src="{{roleImage}}" mode="aspectFill" />
+  </view>
+  <view class="register-card card">
+    <view class="group-title"><text class="group-number">01</text>账号信息</view>
+    <view class="field"><text class="field-label">登录账号</text><input class="field-control" data-key="account" value="{{account}}" placeholder="用于下次继续旅程" bindinput="input"/><text class="error" wx:if="{{errors.account}}">{{errors.account}}</text></view>
+    <view class="field"><text class="field-label">登录密码</text><input class="field-control" data-key="password" value="{{password}}" password placeholder="至少 6 位" bindinput="input"/><text class="error" wx:if="{{errors.password}}">{{errors.password}}</text></view>
+    <view class="divider"></view>
+    <view class="group-title"><text class="group-number">02</text>冒险档案</view>
+    <view class="field"><text class="field-label">昵称</text><input class="field-control" data-key="name" value="{{name}}" placeholder="如何称呼你" bindinput="input"/><text class="error" wx:if="{{errors.name}}">{{errors.name}}</text></view>
+    <view class="field"><text class="field-label">学习目标</text><textarea class="field-control textarea" data-key="goal" value="{{goal}}" placeholder="例如：30 天掌握英语口语基础" bindinput="input"/><text class="error" wx:if="{{errors.goal}}">{{errors.goal}}</text></view>
+    <view class="picker-row">
+      <view class="picker-cell"><text class="field-label">目标期限</text><picker range="{{deadlineOptions}}" bindchange="deadlineChange"><view class="picker-value">{{deadline}}⌄</view></picker></view>
+      <view class="picker-cell"><text class="field-label">每日投入</text><picker range="{{timeOptions}}" bindchange="timeChange"><view class="picker-value">{{dailyTime}}⌄</view></picker></view>
+    </view>
+    <view class="security-note"><text class="security-icon">◇</text><view><view class="security-title">Secret 安全托管</view><view class="hint">AI Key 只配置在微信云托管环境变量中，小程序不会收集或保存 Key。</view></view></view>
+    <button class="primary-button submit" bindtap="submit">确认并生成世界</button>
+  </view>
+</view>

@@ -1,0 +1,12 @@
+.DS_Store
+.env
+.env.*
+!.env.example
+backend/.env
+backend/.env.*
+!backend/.env.example
+project.private.config.json
+miniprogram/config/cloud.local.js
+
+backend/runtime/*
+!backend/runtime/.gitkeep

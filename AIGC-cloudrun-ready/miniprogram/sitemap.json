@@ -1,0 +1,4 @@
+{
+  "desc": "任务织梦师页面索引",
+  "rules": [{ "action": "allow", "page": "*" }]
+}

@@ -1,0 +1,21 @@
+<view class="role-page">
+  <view class="role-heading">
+    <view class="page-title">选择学习角色</view>
+    <view class="page-subtitle">左右滑动，选择最适合你的学习方式</view>
+  </view>
+  <swiper class="role-swiper" current="{{current}}" previous-margin="48rpx" next-margin="48rpx" bindchange="onChange" easing-function="easeOutCubic">
+    <swiper-item wx:for="{{roles}}" wx:key="id">
+      <view class="role-card {{current === index ? 'active' : ''}}" data-index="{{index}}" bindtap="choose">
+        <image class="role-image" src="{{item.image}}" mode="aspectFill" />
+        <view class="role-copy">
+          <view class="role-name">{{item.name}}</view>
+          <view class="role-strategy">{{item.description}}</view>
+          <view class="role-world">{{item.worldSetting}}</view>
+          <view class="selected-mark" wx:if="{{current === index}}">已选择</view>
+        </view>
+      </view>
+    </swiper-item>
+  </swiper>
+  <view class="role-indicator">{{current + 1}} / {{roles.length}}</view>
+  <button class="primary-button next-button" bindtap="next">下一步：填写信息</button>
+</view>

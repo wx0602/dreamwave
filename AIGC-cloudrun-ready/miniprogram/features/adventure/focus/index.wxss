@@ -1,0 +1,12 @@
+.focus-page { position:relative; min-height:100vh; overflow:hidden; background:#244661; }
+.focus-background { position:absolute; inset:0; width:100%; height:100%; }
+.focus-scrim { position:absolute; inset:0; background:linear-gradient(180deg,rgba(18,39,57,.26),rgba(10,29,45,.64)); }
+.focus-content { position:relative; z-index:1; display:flex; flex-direction:column; justify-content:space-between; align-items:center; min-height:100vh; padding:42rpx 42rpx calc(70rpx + env(safe-area-inset-bottom)); }
+.focus-panel { width:100%; margin-top:16rpx; padding:48rpx 34rpx; text-align:center; border:2rpx solid rgba(255,255,255,.3); border-radius:50rpx; background:rgba(23,55,80,.38); box-shadow:0 20rpx 60rpx rgba(8,26,40,.2); backdrop-filter:blur(16px); }
+.focus-mode { color:#f6fbff; font-weight:700; }
+.focus-title { margin-top:30rpx; color:#fff; font-size:44rpx; font-weight:700; line-height:1.45; }
+.focus-timer { margin-top:34rpx; color:#fff; font-family:monospace; font-size:104rpx; font-weight:700; letter-spacing:6rpx; }
+.focus-hint { margin-top:28rpx; color:#ecf7ff; line-height:1.7; }
+.pause-button { display:flex; align-items:center; justify-content:center; width:140rpx; height:140rpx; padding:0; border:2rpx solid rgba(255,255,255,.42); border-radius:50%; color:#fff; background:rgba(22,51,76,.58); font-size:48rpx; line-height:140rpx; backdrop-filter:blur(12px); }
+.focus-modal { text-align:center; }
+.focus-actions { display:grid; grid-template-columns:1fr 1fr; gap:16rpx; margin-top:30rpx; }

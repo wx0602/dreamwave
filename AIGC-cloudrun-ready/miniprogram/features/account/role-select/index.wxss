@@ -1,0 +1,13 @@
+.role-page { min-height: 100vh; padding: 36rpx 0 52rpx; background: linear-gradient(180deg,#f4f9ff,#edf7ff); }
+.role-heading { padding: 0 40rpx; text-align: center; }
+.role-swiper { height: 990rpx; margin-top: 28rpx; }
+.role-card { height: 930rpx; margin: 20rpx 12rpx; overflow: hidden; border-radius: 46rpx; background: #fff; box-shadow: 0 14rpx 38rpx rgba(43,83,120,.11); transform: scale(.93); opacity: .78; transition: all .25s; }
+.role-card.active { transform: scale(1); opacity: 1; box-shadow: 0 24rpx 64rpx rgba(50,105,153,.2); }
+.role-image { width: 100%; height: 590rpx; background: #dceeff; }
+.role-copy { position: relative; padding: 30rpx 32rpx; text-align: center; }
+.role-name { font-size: 46rpx; font-weight: 700; color: #2f3440; }
+.role-strategy { margin-top: 12rpx; color: #4f9ef0; font-weight: 700; }
+.role-world { margin-top: 18rpx; color: #6c7a89; font-size: 26rpx; line-height: 1.65; }
+.selected-mark { position: absolute; top: 28rpx; right: 28rpx; padding: 8rpx 16rpx; border-radius: 999rpx; color: #fff; background: #69b98a; font-size: 21rpx; }
+.role-indicator { margin-top: 2rpx; text-align: center; color: #9aa6b2; font-size: 24rpx; }
+.next-button { width: auto; margin: 30rpx 48rpx 0; }

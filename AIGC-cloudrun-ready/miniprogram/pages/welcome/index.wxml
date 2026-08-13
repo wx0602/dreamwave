@@ -1,0 +1,12 @@
+<view class="welcome-page">
+  <view class="welcome-content">
+    <image class="welcome-image" src="/assets/welcome.jpg" mode="aspectFit" />
+    <view class="welcome-badge">AI 学习冒险</view>
+    <view class="welcome-title">{{title}}<text class="cursor" wx:if="{{!ready}}">|</text></view>
+    <view class="welcome-subtitle">{{subtitle}}</view>
+    <view class="welcome-actions {{ready ? 'is-ready' : ''}}">
+      <button class="primary-button" loading="{{loading}}" bindtap="startAdventure">开始创建角色</button>
+      <button class="secondary-button login-button" bindtap="goLogin">登录已有账号</button>
+    </view>
+  </view>
+</view>

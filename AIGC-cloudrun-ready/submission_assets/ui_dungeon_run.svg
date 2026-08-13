@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="860" height="1560" viewBox="0 0 860 1560">
+<defs>
+  <linearGradient id="bgGrad" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0%" stop-color="#EAF4FF"/>
+    <stop offset="100%" stop-color="#F7FBFF"/>
+  </linearGradient>
+</defs>
+<rect x="0" y="0" width="860" height="1560" rx="0" fill="url(#bgGrad)" />
+<rect x="70" y="50" width="720" height="1460" rx="58" fill="#1C2430" />
+<rect x="95" y="92" width="670" height="1376" rx="44" fill="#F4F9FF" />
+<rect x="328" y="66" width="204" height="22" rx="10" fill="#131922" />
+<text x="430" y="140" font-family="Droid Sans Fallback, Microsoft YaHei, Noto Sans CJK SC, sans-serif" font-size="28" fill="#2F3440" font-weight="bold" text-anchor="middle">界面示意图 4</text>
+<text x="430" y="176" font-family="Droid Sans Fallback, Microsoft YaHei, Noto Sans CJK SC, sans-serif" font-size="15" fill="#6C7A89" font-weight="normal" text-anchor="middle">剧情副本分支决策页</text>
+<rect x="120" y="258" width="620" height="950" rx="28" fill="#FBFEFF" stroke="#D9EAF7" stroke-width="2" />
+<text x="160" y="322" font-family="Droid Sans Fallback, Microsoft YaHei, Noto Sans CJK SC, sans-serif" font-size="18" fill="#4F9EF0" font-weight="bold" text-anchor="start">第 2 幕 / 共 4 幕</text>
+<text x="160" y="366" font-family="Droid Sans Fallback, Microsoft YaHei, Noto Sans CJK SC, sans-serif" font-size="26" fill="#2F3440" font-weight="bold" text-anchor="start">月蚀书塔的失落回响</text>
+<rect x="160" y="396" width="180" height="36" rx="16" fill="#DCEEFF" />
+<text x="250" y="420" font-family="Droid Sans Fallback, Microsoft YaHei, Noto Sans CJK SC, sans-serif" font-size="16" fill="#4F9EF0" font-weight="bold" text-anchor="middle">秘识 4 · 共鸣 2 · 定意 3</text>
+<text x="160" y="476" font-family="Droid Sans Fallback, Microsoft YaHei, Noto Sans CJK SC, sans-serif" font-size="28" fill="#2F3440" font-weight="bold" text-anchor="start">观星穹顶的逆旋仪</text>
+<text x="160" y="528" font-family="Droid Sans Fallback, Microsoft YaHei, Noto Sans CJK SC, sans-serif" font-size="18" fill="#6C7A89" font-weight="normal" text-anchor="start"><tspan x="160" dy="0">你沿着低语来到观星穹顶，逆旋仪正在把群星轨迹</tspan><tspan x="160" dy="26">倒转。你必须决定，是直接解读未知真相，还是让</tspan><tspan x="160" dy="26">灵灯与自己共同承担星压。</tspan></text>
+<rect x="160" y="676" width="540" height="68" rx="22" fill="#6FB6FF" />
+<text x="430" y="717" font-family="Droid Sans Fallback, Microsoft YaHei, Noto Sans CJK SC, sans-serif" font-size="20" fill="#FFFFFF" font-weight="bold" text-anchor="middle">直接解读倒转星轨</text>
+<rect x="160" y="766" width="540" height="68" rx="22" fill="#88C4FF" />
+<text x="430" y="807" font-family="Droid Sans Fallback, Microsoft YaHei, Noto Sans CJK SC, sans-serif" font-size="20" fill="#FFFFFF" font-weight="bold" text-anchor="middle">将星压分给守塔灵灯</text>
+<rect x="160" y="856" width="540" height="68" rx="22" fill="#9BD0FF" />
+<text x="430" y="897" font-family="Droid Sans Fallback, Microsoft YaHei, Noto Sans CJK SC, sans-serif" font-size="20" fill="#FFFFFF" font-weight="bold" text-anchor="middle">徒手稳住逆旋仪中轴</text>
+<rect x="160" y="962" width="540" height="122" rx="24" fill="#EEF5FC" stroke="#D9EAF7" stroke-width="2" />
+<text x="188" y="1012" font-family="Droid Sans Fallback, Microsoft YaHei, Noto Sans CJK SC, sans-serif" font-size="18" fill="#6C7A89" font-weight="normal" text-anchor="start">每次选择都会同步改变路线状态、即时奖励与结局走向。</text>
+<rect x="160" y="1108" width="540" height="66" rx="22" fill="#C9D8E8" />
+<text x="430" y="1148" font-family="Droid Sans Fallback, Microsoft YaHei, Noto Sans CJK SC, sans-serif" font-size="20" fill="#FFFFFF" font-weight="bold" text-anchor="middle">结算副本</text>
+</svg>

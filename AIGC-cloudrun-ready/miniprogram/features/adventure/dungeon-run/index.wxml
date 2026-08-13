@@ -1,0 +1,4 @@
+<view class="run-page watercolor-page"><view class="page-pad"><view class="run-heading"><view class="tag">DUNGEON RUN</view><view class="page-title">副本挑战</view></view>
+ <view class="run-card card"><view class="run-progress">{{progress}}</view><view class="run-chapter">{{chapter}}</view><view class="run-state">{{stateText}}</view><view class="event-title">{{eventTitle}}</view><view class="event-desc">{{eventDesc}}</view><view class="choices"><button class="choice" wx:for="{{choices}}" wx:key="choiceId" data-id="{{item.choiceId}}" disabled="{{loading}}" bindtap="choose">{{item.label}}<text>›</text></button></view><button class="primary-button settle" wx:if="{{readyToSettle}}" bindtap="settle">结算副本</button><button class="secondary-button back" wx:if="{{!choices.length&&!readyToSettle}}" bindtap="back">返回副本入口</button></view>
+ <view class="loading-cover" wx:if="{{loading}}"><view class="loading-orb"></view><text>正在读取副本事件...</text></view>
+</view></view>

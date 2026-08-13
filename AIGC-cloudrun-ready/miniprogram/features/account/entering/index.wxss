@@ -1,0 +1,10 @@
+.entering-page { display: flex; align-items: center; min-height: 100vh; padding: 54rpx; background: radial-gradient(circle at 50% 25%,#dff6ff,#dbeaff 46%,#a9c6e7); }
+.entering-panel { width: 100%; padding: 58rpx 38rpx; text-align: center; }
+.emblem { display: flex; align-items: center; justify-content: center; width: 170rpx; height: 170rpx; margin: 0 auto 36rpx; border-radius: 50%; background: rgba(255,255,255,.55); box-shadow: 0 0 0 20rpx rgba(255,255,255,.18),0 0 80rpx rgba(79,158,240,.38); animation: pulse 1.7s ease-in-out infinite; }
+.emblem-core { display: flex; align-items: center; justify-content: center; width: 112rpx; height: 112rpx; border-radius: 50%; color: #fff; font-size: 52rpx; background: linear-gradient(145deg,#77d6e3,#6b7de7); }
+.stage { margin-top: 62rpx; color: #4f6070; font-size: 30rpx; font-weight: 700; }
+.progress-row { display: flex; align-items: center; gap: 20rpx; margin-top: 26rpx; color: #4f9ef0; font-weight: 700; }
+.error { margin-top: 28rpx; color: #bd6262; line-height: 1.6; }
+.error-actions { display: flex; gap: 18rpx; margin-top: 28rpx; }
+.error-actions button { flex: 1; }
+@keyframes pulse { 50% { transform: scale(1.06); box-shadow: 0 0 0 30rpx rgba(255,255,255,.12),0 0 100rpx rgba(79,158,240,.48); } }
