@@ -6,6 +6,7 @@ const ROUTES = Object.freeze({
   sessionLogins: "/api/session-logins",
   currentSession: "/api/sessions/current",
   tasks: "/api/tasks",
+  goals: "/api/goals",
   goalsAdvance: "/api/goals/advance",
   goalsReplan: "/api/goals/replan",
   nextSuggestion: "/api/goals/next-suggestion",
@@ -14,6 +15,7 @@ const ROUTES = Object.freeze({
   dungeonStart: "/api/dungeons/current/start",
   dungeonEvents: "/api/dungeons/current/events",
   dungeonSettlement: "/api/dungeons/current/settlement",
+  starMapToolUses: "/api/star-map/tools/uses",
   currentAgent: "/api/agents/current",
   currentAgentMemories: "/api/agents/current/memories",
   purchases: "/api/purchases",
@@ -68,6 +70,9 @@ async function request(path, method = "GET", data) {
     const result = await callContainer(path, method, data);
     return unwrap(result);
   } catch (error) {
+    if (path === ROUTES.goals && /接口不存在|404/.test(String(error && error.message || ""))) {
+      throw new Error("云端后端版本过旧，请重新部署 aigc-backend 后再新增长期目标");
+    }
     throw normalizeError(error);
   }
 }
@@ -78,6 +83,7 @@ module.exports = {
   loginSession: (payload) => request(ROUTES.sessionLogins, "POST", payload),
   getCurrentSession: () => request(ROUTES.currentSession),
   createTask: (title) => request(ROUTES.tasks, "POST", { title }),
+  createGoal: (title, durationDays) => request(ROUTES.goals, "POST", { title, durationDays }),
   updateTask: (taskId, payload) => request(`${ROUTES.tasks}/${encodeURIComponent(taskId)}/edits`, "POST", payload),
   completeTask: (taskId) => request(`${ROUTES.tasks}/${encodeURIComponent(taskId)}/completion`, "POST"),
   advanceGoal: (goal) => request(ROUTES.goalsAdvance, "POST", { goal }),
@@ -88,6 +94,7 @@ module.exports = {
   startDungeon: (demo) => request(ROUTES.dungeonStart, "POST", { demo: Boolean(demo) }),
   resolveDungeonEvent: (choiceId) => request(ROUTES.dungeonEvents, "POST", { choiceId }),
   settleDungeon: () => request(ROUTES.dungeonSettlement, "POST", {}),
+  useStarMapTool: (toolId, taskId) => request(ROUTES.starMapToolUses, "POST", { toolId, taskId }),
   getCurrentAgent: () => request(ROUTES.currentAgent),
   getCurrentAgentMemories: () => request(ROUTES.currentAgentMemories),
   createPurchase: (itemId) => request(ROUTES.purchases, "POST", { itemId }),

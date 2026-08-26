@@ -17,7 +17,7 @@
     }
   ],
   "window": {
-    "navigationBarTitleText": "任务织梦师",
+    "navigationBarTitleText": "织梦学旅",
     "navigationBarBackgroundColor": "#F4F9FF",
     "navigationBarTextStyle": "black",
     "backgroundColor": "#F4F9FF",
@@ -31,7 +31,7 @@
     "list": [
       { "pagePath": "pages/home/index", "text": "首页", "iconPath": "assets/icons/home.png", "selectedIconPath": "assets/icons/home-active.png" },
       { "pagePath": "pages/journal/index", "text": "日志", "iconPath": "assets/icons/journal.png", "selectedIconPath": "assets/icons/journal-active.png" },
-      { "pagePath": "pages/dungeon/index", "text": "副本", "iconPath": "assets/icons/dungeon.png", "selectedIconPath": "assets/icons/dungeon-active.png" },
+      { "pagePath": "pages/dungeon/index", "text": "星图", "iconPath": "assets/icons/dungeon.png", "selectedIconPath": "assets/icons/dungeon-active.png" },
       { "pagePath": "pages/profile/index", "text": "我的", "iconPath": "assets/icons/profile.png", "selectedIconPath": "assets/icons/profile-active.png" }
     ]
   },

@@ -4,7 +4,7 @@ Page({
   data: { title: "", subtitle: "", ready: false, loading: false },
   onLoad() {
     this.timers = [];
-    this.typeText("title", "欢迎来到任务织梦师", 85, () => {
+    this.typeText("title", "欢迎来到织梦学旅", 85, () => {
       this.later(() => this.typeText("subtitle", "把学习目标拆成任务，把过程写成冒险故事。", 42, () => {
         this.later(() => this.setData({ ready: true }), 260);
       }), 180);

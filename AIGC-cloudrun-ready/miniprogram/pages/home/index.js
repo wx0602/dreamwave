@@ -7,9 +7,31 @@ Page({
   data: {
     loading: true, chapter: "", goal: "", tasks: [], state: null,
     companionExpanded: false, companionName: "伴学", companionTag: "陪跑", companionImage: "", companionMessage: "正在读取今天的计划...", companionPrompts: [], companionIndex: 0,
+    companionX: 0, companionY: 300, companionDockLeft: false, companionPanelBelow: false,
     inputModal: false, inputMode: "create", inputTitle: "", inputValue: "", inputTaskId: "",
     editModal: false, editTask: null, editTitle: "", editDetail: "", editMinutes: "25", editDeadline: "",
-    actionModal: false, story: null, nextGoalModal: false, nextGoal: "",
+    actionModal: false, story: null,
+    goalModal: false, goalTitle: "", goalDays: "30",
+  },
+  onLoad() {
+    const windowInfo = wx.getWindowInfo ? wx.getWindowInfo() : wx.getSystemInfoSync();
+    const ballSize = Math.max(52, Math.round(Number(windowInfo.windowWidth || 375) * 0.14));
+    const maxX = Math.max(12, Number(windowInfo.windowWidth || 375) - ballSize - 12);
+    const maxY = Math.max(100, Number(windowInfo.windowHeight || 667) - ballSize - 92);
+    const saved = storage.get(storage.KEYS.companionPosition, null);
+    const savedY = saved && Number(saved.y);
+    const dockLeft = Boolean(saved && saved.dockLeft);
+    this._companionBounds = { maxX, maxY };
+    this._companionPosition = {
+      x: dockLeft ? 12 : maxX,
+      y: Number.isFinite(savedY) ? Math.max(88, Math.min(maxY, savedY)) : maxY,
+    };
+    this.setData({
+      companionX: this._companionPosition.x,
+      companionY: this._companionPosition.y,
+      companionDockLeft: dockLeft,
+      companionPanelBelow: this._companionPosition.y < 220,
+    });
   },
   onShow() {
     if (!storage.get(storage.KEYS.userId, "")) { wx.reLaunch({ url: "/pages/welcome/index" }); return; }
@@ -30,6 +52,7 @@ Page({
     const roleId = normalizeRoleId((state.agent && state.agent.roleId) || user.selectedRoleId || storage.get(storage.KEYS.selectedRole, "traveler"));
     const meta = ROLE_META[roleId];
     const companion = storage.get(storage.KEYS.companion, {});
+    const activeGoals = ((state.goalPortfolio && state.goalPortfolio.goals) || []).filter((goal) => goal.status === "ACTIVE");
     const tasks = (state.tasks || []).map((task) => ({
       ...task,
       done: String(task.status).toLowerCase() === "completed",
@@ -42,11 +65,10 @@ Page({
     this.setData({
       state, tasks,
       chapter: value(user.currentChapter, "新的冒险线"),
-      goal: value(state.goalPlan && state.goalPlan.longTermGoal, value(user.currentGoal, "未设定")),
+      goal: activeGoals.length > 1 ? `并行长期目标 ${activeGoals.length} 项` : value(activeGoals[0] && activeGoals[0].title, value(user.currentGoal, "未设定")),
       companionName, companionTag: meta.companionTag, companionImage: getRoleImage(roleId),
       companionPrompts: prompts, companionIndex: 0, companionMessage: prompts[0],
     });
-    if (state.transition && state.transition.needsNextGoalPrompt) this.setData({ nextGoalModal: true });
   },
   buildCompanionPrompts(state, roleId, name, tasks) {
     const completed = tasks.filter((task) => task.done).length;
@@ -64,8 +86,34 @@ Page({
   cycleCompanion() {
     const prompts = this.data.companionPrompts;
     if (!prompts.length) return;
-    const companionIndex = (this.data.companionIndex + 1) % prompts.length;
+    const companionIndex = this.data.companionExpanded
+      ? (this.data.companionIndex + 1) % prompts.length
+      : this.data.companionIndex;
     this.setData({ companionExpanded: true, companionIndex, companionMessage: prompts[companionIndex] });
+  },
+  companionMove(event) {
+    if (!event.detail) return;
+    this._companionPosition = { x: Number(event.detail.x) || 0, y: Number(event.detail.y) || 0 };
+    if (this.data.companionExpanded && event.detail.source === "touch") {
+      this.setData({ companionExpanded: false });
+    }
+  },
+  companionMoveEnd() {
+    const bounds = this._companionBounds || { maxX: 300, maxY: 500 };
+    const current = this._companionPosition || { x: bounds.maxX, y: bounds.maxY };
+    const dockLeft = current.x < bounds.maxX / 2;
+    const position = {
+      x: dockLeft ? 12 : bounds.maxX,
+      y: Math.max(88, Math.min(bounds.maxY, current.y)),
+    };
+    this._companionPosition = position;
+    this.setData({
+      companionX: position.x,
+      companionY: position.y,
+      companionDockLeft: dockLeft,
+      companionPanelBelow: position.y < 220,
+    });
+    storage.set(storage.KEYS.companionPosition, { y: position.y, dockLeft });
   },
   showActions() {
     this.setData({ actionModal: true });
@@ -75,8 +123,8 @@ Page({
     const action = event.currentTarget.dataset.action;
     this.setData({ actionModal: false });
     if (action === "create") this.setData({ inputModal: true, inputMode: "create", inputTitle: "新建支线任务", inputValue: "", inputTaskId: "" });
-    if (action === "map") wx.navigateTo({ url: "/features/adventure/goal-map/index" });
-    if (action === "replan") this.replan("INTERRUPTED");
+    if (action === "goal") this.setData({ goalModal: true, goalTitle: "", goalDays: "30" });
+    if (action === "map" || action === "replan") wx.navigateTo({ url: "/features/adventure/goal-map/index" });
   },
   closeInput() { this.setData({ inputModal: false }); },
   noop() {},
@@ -94,12 +142,6 @@ Page({
     if (!task || task.done) return;
     getApp().globalData.focusTask = task;
     wx.navigateTo({ url: "/features/adventure/focus/index" });
-  },
-  completeTask(event) {
-    const task = this.data.tasks[Number(event.currentTarget.dataset.index)];
-    if (!task || task.done) return;
-    getApp().globalData.completionTask = task;
-    wx.navigateTo({ url: "/features/adventure/completion/index" });
   },
   editTask(event) {
     const task = this.data.tasks[Number(event.currentTarget.dataset.index)];
@@ -146,13 +188,17 @@ Page({
     if (story) this.setData({ story });
   },
   closeStory() { this.setData({ story: null }); },
-  nextGoalInput(event) { this.setData({ nextGoal: event.detail.value }); },
-  async submitNextGoal() {
-    const goal = this.data.nextGoal.trim();
-    if (!goal) { wx.showToast({ title: "下一阶段目标不能为空", icon: "none" }); return; }
-    this.setData({ nextGoalModal: false, loading: true });
-    try { this.handleResult(await api.advanceGoal(goal)); this.setData({ nextGoal: "" }); }
-    catch (error) { showError(error, "新主线生成失败"); this.setData({ nextGoalModal: true }); }
+  goalInput(event) { this.setData({ [event.currentTarget.dataset.key]: event.detail.value }); },
+  closeGoal() { this.setData({ goalModal: false }); },
+  async submitGoal() {
+    const title = this.data.goalTitle.trim();
+    const days = Number(this.data.goalDays);
+    if (!title || !Number.isFinite(days) || days < 1 || days > 365) {
+      wx.showToast({ title: "请填写目标和 1—365 天期限", icon: "none" }); return;
+    }
+    this.setData({ goalModal: false, loading: true });
+    try { this.handleResult(await api.createGoal(title, Math.round(days))); }
+    catch (error) { showError(error, "长期目标创建失败"); this.setData({ goalModal: true }); }
     finally { this.setData({ loading: false }); }
   },
 });

@@ -1,6 +1,7 @@
 const { getRole, getRoleOrThrow, listRoles } = require("../constants/roles");
 const { getDungeonStoryline } = require("../constants/dungeonStorylines");
 const { defaultShop } = require("../constants/shop");
+const { getStarTool, getConstellationReward } = require("../constants/starMap");
 const { selectStoryAsset } = require("../constants/storyAssets");
 const { formatDiaryTime, getDungeonState } = require("../utils/time");
 const { clone } = require("../utils/clone");
@@ -18,6 +19,12 @@ const {
   loadAccountSnapshot,
 } = require("../store/accountStore");
 const { getResolvedApiKey } = require("./deepseekService");
+const {
+  DEFAULT_TIME_ZONE,
+  parseDailyMinutes,
+  getPlanDate,
+  generateDailyPlan,
+} = require("./dailyPlanService");
 const { generateGoalBlueprint } = require("./goalBlueprintService");
 const {
   GOAL_LEVELS,
@@ -25,15 +32,27 @@ const {
   classifyGoal,
   generateClarifyingQuestions,
   generateGoalPlan,
+  generateRollingTaskPlan,
   replanTasks: planReplacementTasks,
   generateNextSuggestion: planNextSuggestion,
 } = require("./goalPlanningService");
+const {
+  initializeGoalPlanning,
+  ensureGoalPlanning,
+  applyRollingTaskPlan,
+  buildSideTasks: buildPortfolioSideTasks,
+} = require("./portfolioPlanningService");
 const {
   generateTaskNarrative,
   generateSideQuestNarrative,
   generateChapterFinale,
   generateSeasonArchive,
 } = require("./narrativeService");
+const {
+  buildDungeonLearningContext,
+  calculateDungeonReward,
+} = require("./dungeonProgressService");
+const { generateDungeonSettlementNarrative } = require("./dungeonNarrativeService");
 const { getSkillsByIds } = require("./agentCatalogService");
 const {
   syncIdentity,
@@ -103,6 +122,424 @@ function addDays(date, days) {
   const next = new Date(date);
   next.setDate(next.getDate() + days);
   return next;
+}
+
+function createEmptyStarMap() {
+  return {
+    version: 1,
+    collections: [],
+    tools: {},
+    scheduledReviews: [],
+  };
+}
+
+function ensureStarMapState(state) {
+  let changed = false;
+  if (!state.starMap || typeof state.starMap !== "object") {
+    state.starMap = createEmptyStarMap();
+    return true;
+  }
+  if (!Array.isArray(state.starMap.collections)) {
+    state.starMap.collections = [];
+    changed = true;
+  }
+  if (!state.starMap.tools || typeof state.starMap.tools !== "object" || Array.isArray(state.starMap.tools)) {
+    state.starMap.tools = {};
+    changed = true;
+  }
+  if (!Array.isArray(state.starMap.scheduledReviews)) {
+    state.starMap.scheduledReviews = [];
+    changed = true;
+  }
+  if (!state.starMap.version) {
+    state.starMap.version = 1;
+    changed = true;
+  }
+  return changed;
+}
+
+function grantStarTool(state, tool) {
+  if (!tool) {
+    return null;
+  }
+  ensureStarMapState(state);
+  const now = new Date().toISOString();
+  const current = state.starMap.tools[tool.id] || {
+    ...tool,
+    charges: 0,
+    timesUsed: 0,
+    obtainedAt: now,
+  };
+  current.name = tool.name;
+  current.icon = tool.icon;
+  current.action = tool.action;
+  current.detail = tool.detail;
+  current.charges = Number(current.charges || 0) + 1;
+  state.starMap.tools[tool.id] = current;
+
+  const inventoryItem = Array.isArray(state.inventory)
+    ? state.inventory.find((item) => item && item.id === tool.id)
+    : null;
+  if (inventoryItem) {
+    inventoryItem.charges = current.charges;
+    inventoryItem.detail = tool.detail;
+  } else {
+    if (!Array.isArray(state.inventory)) {
+      state.inventory = [];
+    }
+    state.inventory.unshift({
+      id: tool.id,
+      name: tool.name,
+      detail: tool.detail,
+      category: "star-tool",
+      equipped: true,
+      charges: current.charges,
+    });
+  }
+  return current;
+}
+
+function collectCompletedConstellations(state) {
+  ensureStarMapState(state);
+  const plan = state.goalPlan;
+  if (!plan || !Array.isArray(plan.stageGoals)) {
+    return [];
+  }
+  const collectedIds = new Set(
+    state.starMap.collections.map((entry) => entry && entry.stageGoalId).filter(Boolean)
+  );
+  const awards = [];
+  plan.stageGoals.forEach((stage) => {
+    if (!stage || String(stage.status || "").toUpperCase() !== "DONE" || collectedIds.has(stage.id)) {
+      return;
+    }
+    const stars = (stage.tasks || []).map((task) => ({
+      taskId: task.id,
+      title: task.title,
+      completedAt: task.completedAt || null,
+    }));
+    const completedTimes = stars.map((star) => star.completedAt).filter(Boolean).sort();
+    const tool = getConstellationReward(state.starMap.collections.length);
+    const granted = grantStarTool(state, tool);
+    state.starMap.collections.unshift({
+      constellationId: allocateId(state, "constellation"),
+      goalPlanId: plan.id,
+      longTermGoal: plan.longTermGoal,
+      stageGoalId: stage.id,
+      title: stage.title,
+      description: stage.description,
+      completedAt: completedTimes[completedTimes.length - 1] || new Date().toISOString(),
+      starCount: stars.length,
+      stars,
+      rewardToolId: tool.id,
+      rewardToolName: tool.name,
+    });
+    awards.push({ stageGoalId: stage.id, title: stage.title, tool: granted });
+    collectedIds.add(stage.id);
+  });
+  return awards;
+}
+
+const REAL_CONSTELLATIONS = Object.freeze([
+  { id: "ursa-major", name: "大熊座" },
+  { id: "orion", name: "猎户座" },
+  { id: "cassiopeia", name: "仙后座" },
+  { id: "cygnus", name: "天鹅座" },
+  { id: "scorpius", name: "天蝎座" },
+  { id: "leo", name: "狮子座" },
+  { id: "taurus", name: "金牛座" },
+  { id: "gemini", name: "双子座" },
+  { id: "aquila", name: "天鹰座" },
+  { id: "lyra", name: "天琴座" },
+  { id: "andromeda", name: "仙女座" },
+  { id: "pegasus", name: "飞马座" },
+]);
+const PORTFOLIO_MAIN_TASKS_PER_DAY = 3;
+const PORTFOLIO_SIDE_TASKS_PER_DAY = 2;
+const STARS_PER_CONSTELLATION_MAP = 15;
+
+function parseGoalDurationDays(value, fallback = 30) {
+  const text = String(value || "").trim();
+  const match = text.match(/(\d+)\s*(天|周|个月|月)?/);
+  if (!match) return fallback;
+  const amount = Math.max(1, Number(match[1]) || fallback);
+  const unit = match[2] || "天";
+  const days = unit === "周" ? amount * 7 : unit === "个月" || unit === "月" ? amount * 30 : amount;
+  return Math.max(1, Math.min(365, days));
+}
+
+function buildPortfolioGoal(state, options = {}) {
+  const durationDays = parseGoalDurationDays(options.durationDays || options.deadline, 30);
+  const constellation = REAL_CONSTELLATIONS[
+    Math.max(0, Number(options.constellationIndex) || 0) % REAL_CONSTELLATIONS.length
+  ];
+  const now = new Date().toISOString();
+  const goalId = allocateId(state, "long-goal");
+  const goal = {
+    goalId,
+    title: String(options.title || "新的长期目标").trim(),
+    description: String(options.description || `每天完成 ${PORTFOLIO_MAIN_TASKS_PER_DAY} 个主线任务，${durationDays} 天共点亮 ${durationDays * PORTFOLIO_MAIN_TASKS_PER_DAY} 颗星。`).trim(),
+    durationDays,
+    completedDays: 0,
+    completedStars: 0,
+    totalStarCount: durationDays * PORTFOLIO_MAIN_TASKS_PER_DAY,
+    starsPerDay: PORTFOLIO_MAIN_TASKS_PER_DAY,
+    status: "ACTIVE",
+    constellationId: constellation.id,
+    constellationName: constellation.name,
+    constellationOffset: Math.max(0, Number(options.constellationIndex) || 0),
+    startDate: getPlanDate(new Date(), state.profile && state.profile.timeZone || DEFAULT_TIME_ZONE),
+    lastReleasedDate: null,
+    createdAt: now,
+    completedAt: null,
+    nodes: [],
+    constellations: [],
+  };
+  initializeGoalPlanning(
+    goal,
+    options.plan,
+    parseDailyMinutes(state.profile && state.profile.dailyTime, 120)
+  );
+  ensureGoalSeriesConstellations(state, goal);
+  return goal;
+}
+
+function refreshGoalSeriesMetrics(goal) {
+  const nodeById = new Map((goal.nodes || []).map((node) => [node.nodeId, node]));
+  (goal.constellations || []).forEach((map, index) => {
+    const nodes = (map.nodeIds || []).map((nodeId) => nodeById.get(nodeId)).filter(Boolean);
+    map.starCount = (map.nodeIds || []).length;
+    map.completedStars = nodes.filter((node) => node.status === "DONE").length;
+    if (map.starCount > 0 && map.completedStars === map.starCount) {
+      map.status = "COMPLETED";
+      map.completedAt = map.completedAt || nodes.map((node) => node.completedAt).filter(Boolean).sort().slice(-1)[0] || new Date().toISOString();
+    } else {
+      const previousComplete = index > 0 && goal.constellations[index - 1]
+        && goal.constellations[index - 1].status === "COMPLETED";
+      map.status = index === 0 || previousComplete || nodes.some((node) => node.status !== "LOCKED") ? "ACTIVE" : "LOCKED";
+      map.completedAt = null;
+    }
+  });
+}
+
+function ensureGoalSeriesConstellations(state, goal) {
+  const totalStarCount = Number(goal.totalStarCount || goal.durationDays * PORTFOLIO_MAIN_TASKS_PER_DAY);
+  const expectedCount = Math.ceil(totalStarCount / STARS_PER_CONSTELLATION_MAP);
+  const existing = Array.isArray(goal.constellations) ? goal.constellations : [];
+  let changed = existing.length !== expectedCount;
+  const offset = Math.max(0, Number(goal.constellationOffset) || 0);
+  goal.constellations = Array.from({ length: expectedCount }, (_, index) => {
+    const previous = existing[index] || {};
+    const template = REAL_CONSTELLATIONS[(offset + index) % REAL_CONSTELLATIONS.length];
+    const start = index * STARS_PER_CONSTELLATION_MAP;
+    const nodeIds = Array.from(
+      { length: Math.min(STARS_PER_CONSTELLATION_MAP, totalStarCount - start) },
+      (_, nodeIndex) => `${goal.goalId}-star-${start + nodeIndex + 1}`
+    );
+    if (previous.constellationId !== template.id || JSON.stringify(previous.nodeIds || []) !== JSON.stringify(nodeIds)) {
+      changed = true;
+    }
+    return {
+      mapId: previous.mapId || allocateId(state, "series-map"),
+      order: index + 1,
+      constellationId: template.id,
+      constellationName: template.name,
+      nodeIds,
+      starCount: nodeIds.length,
+      completedStars: Number(previous.completedStars || 0),
+      status: previous.status || (index === 0 ? "ACTIVE" : "LOCKED"),
+      completedAt: previous.completedAt || null,
+    };
+  });
+  if (goal.constellations[0]) {
+    goal.constellationId = goal.constellations[0].constellationId;
+    goal.constellationName = goal.constellations[0].constellationName;
+  }
+  refreshGoalSeriesMetrics(goal);
+  return changed;
+}
+
+function refreshPortfolioGoalMetrics(goal) {
+  const nodes = Array.isArray(goal && goal.nodes) ? goal.nodes : [];
+  goal.starsPerDay = PORTFOLIO_MAIN_TASKS_PER_DAY;
+  goal.totalStarCount = Number(goal.durationDays || 0) * PORTFOLIO_MAIN_TASKS_PER_DAY;
+  goal.completedStars = nodes.filter((node) => node && node.status === "DONE").length;
+  let completedDays = 0;
+  for (let day = 1; day <= Number(goal.durationDays || 0); day += 1) {
+    const dayNodes = nodes.filter((node) => node && Number(node.day) === day);
+    if (dayNodes.length === PORTFOLIO_MAIN_TASKS_PER_DAY && dayNodes.every((node) => node.status === "DONE")) {
+      completedDays += 1;
+    }
+  }
+  goal.completedDays = completedDays;
+  refreshGoalSeriesMetrics(goal);
+  if (goal.completedStars >= goal.totalStarCount && goal.totalStarCount > 0) {
+    goal.status = "COMPLETED";
+    goal.completedAt = goal.completedAt || new Date().toISOString();
+  } else {
+    goal.status = "ACTIVE";
+    goal.completedAt = null;
+  }
+}
+
+function ensurePortfolioGoalShape(state, goal) {
+  if (!goal || !Number(goal.durationDays)) return false;
+  const expectedCount = Number(goal.durationDays) * PORTFOLIO_MAIN_TASKS_PER_DAY;
+  const previousPlanningVersion = Number(goal.planningVersion || 0);
+  const before = `${goal.planningVersion}|${(goal.nodes || []).length}|${goal.completedStars}|${(goal.constellations || []).length}`;
+  goal.nodes = (Array.isArray(goal.nodes) ? goal.nodes : []).filter((node) => (
+    node && Number(node.day) >= 1 && Number(node.day) <= Number(goal.durationDays)
+      && Number(node.slot) >= 1 && Number(node.slot) <= PORTFOLIO_MAIN_TASKS_PER_DAY
+  ));
+  const matchingPlan = state.goalPlan && state.goalPlan.longTermGoal === goal.title ? state.goalPlan : null;
+  ensureGoalPlanning(
+    goal,
+    matchingPlan,
+    parseDailyMinutes(state.profile && state.profile.dailyTime, 120)
+  );
+  const changedIds = new Map();
+  goal.nodes.forEach((node) => {
+    const canonicalId = `${goal.goalId}-star-${(Number(node.day) - 1) * PORTFOLIO_MAIN_TASKS_PER_DAY + Number(node.slot)}`;
+    if (node.nodeId !== canonicalId) changedIds.set(node.nodeId, canonicalId);
+    node.nodeId = canonicalId;
+  });
+  if (changedIds.size > 0) {
+    (state.tasks || []).forEach((task) => {
+      if (task.portfolioGoalId === goal.goalId && changedIds.has(task.portfolioNodeId)) {
+        task.portfolioNodeId = changedIds.get(task.portfolioNodeId);
+      }
+    });
+  }
+  if (previousPlanningVersion !== Number(goal.planningVersion)) {
+    goal.aiRollingUpgradePending = previousPlanningVersion > 0;
+    const nodeById = new Map(goal.nodes.map((node) => [node.nodeId, node]));
+    (state.tasks || []).forEach((task) => {
+      if (task.done || task.portfolioGoalId !== goal.goalId || task.type !== "main") return;
+      const node = nodeById.get(task.portfolioNodeId);
+      if (!node || node.status !== "AVAILABLE") return;
+      task.title = node.title;
+      task.detail = node.detail;
+      task.estimatedMinutes = node.estimatedMinutes;
+      task.taskRole = node.taskRole;
+      task.taskRoleLabel = node.taskRoleLabel;
+      task.phaseId = node.phaseId;
+      task.phaseTitle = node.phaseTitle;
+      task.weeklyMilestoneId = node.weeklyMilestoneId;
+      task.weeklyMilestoneTitle = node.weeklyMilestoneTitle;
+      task.qualityScore = node.qualityScore;
+    });
+  }
+  goal.totalStarCount = expectedCount;
+  goal.description = `每天完成 ${PORTFOLIO_MAIN_TASKS_PER_DAY} 个主线任务，${goal.durationDays} 天共点亮 ${expectedCount} 颗星。`;
+  const seriesChanged = ensureGoalSeriesConstellations(state, goal);
+  refreshPortfolioGoalMetrics(goal);
+  return seriesChanged || before !== `${goal.planningVersion}|${goal.nodes.length}|${goal.completedStars}|${goal.constellations.length}`;
+}
+
+function ensureGoalPortfolioState(state) {
+  if (state.goalPortfolio && Array.isArray(state.goalPortfolio.goals) && state.goalPortfolio.goals.length > 0) {
+    let changed = false;
+    state.goalPortfolio.goals.forEach((goal) => {
+      if (ensurePortfolioGoalShape(state, goal)) changed = true;
+    });
+    if (state.transition) state.transition.needsNewGoalPrompt = false;
+    return changed;
+  }
+  const portfolio = { version: 1, goals: [] };
+  if (!state.goalPlan) {
+    state.goalPortfolio = portfolio;
+    return true;
+  }
+
+  const goal = buildPortfolioGoal(state, {
+    title: state.goalPlan.longTermGoal || (state.profile && state.profile.goal),
+    deadline: state.profile && state.profile.deadline,
+    plan: state.goalPlan,
+    constellationIndex: 0,
+  });
+  const completedPlanTasks = (state.goalPlan.stageGoals || [])
+    .flatMap((stage) => stage.tasks || [])
+    .filter((task) => String(task && task.status || "").toUpperCase() === "DONE");
+  completedPlanTasks.slice(0, goal.nodes.length).forEach((task, index) => {
+    goal.nodes[index].title = `第 ${goal.nodes[index].day} 天：${task.title}`;
+    goal.nodes[index].detail = task.description || goal.nodes[index].detail;
+    goal.nodes[index].status = "DONE";
+    goal.nodes[index].completedAt = task.completedAt || new Date().toISOString();
+  });
+  refreshPortfolioGoalMetrics(goal);
+
+  const pendingMain = (state.tasks || []).filter((task) => task && task.type === "main" && !task.done);
+  const firstPending = pendingMain[0];
+  if (firstPending && goal.status === "ACTIVE") {
+    const node = goal.nodes.find((entry) => entry.status === "LOCKED");
+    node.title = `第 ${node.day} 天：${firstPending.title}`;
+    node.detail = firstPending.detail || node.detail;
+    node.estimatedMinutes = Number(firstPending.estimatedMinutes || 25);
+    node.status = "AVAILABLE";
+    node.releasedDate = state.dailyPlan && state.dailyPlan.planDate
+      ? state.dailyPlan.planDate
+      : getPlanDate(new Date(), state.profile && state.profile.timeZone || DEFAULT_TIME_ZONE);
+    firstPending.portfolioGoalId = goal.goalId;
+    firstPending.portfolioNodeId = node.nodeId;
+    firstPending.portfolioDay = node.day;
+    firstPending.portfolioSlot = node.slot;
+    firstPending.portfolioReleaseDate = node.releasedDate;
+    firstPending.goalTitle = goal.title;
+    firstPending.source = "LONG_TERM";
+    firstPending.stageGoalId = null;
+    firstPending.stageTaskId = null;
+  }
+
+  const preserved = (state.tasks || []).filter((task) => task && (task.type === "side" || task.source === "CUSTOM" || task === firstPending || task.done));
+  state.tasks = preserved;
+  goal.lastReleasedDate = firstPending
+    ? goal.nodes.find((node) => node.nodeId === firstPending.portfolioNodeId).releasedDate
+    : completedPlanTasks.length > 0
+      ? state.dailyPlan && state.dailyPlan.planDate || getPlanDate(new Date(), state.profile && state.profile.timeZone || DEFAULT_TIME_ZONE)
+      : null;
+  portfolio.goals.push(goal);
+  state.goalPortfolio = portfolio;
+  if (state.transition) state.transition.needsNewGoalPrompt = false;
+  return true;
+}
+
+function findPortfolioGoalAndNode(state, goalId, nodeId) {
+  const goal = state.goalPortfolio && Array.isArray(state.goalPortfolio.goals)
+    ? state.goalPortfolio.goals.find((entry) => entry && entry.goalId === goalId)
+    : null;
+  if (!goal) return { goal: null, node: null };
+  return { goal, node: (goal.nodes || []).find((entry) => entry && entry.nodeId === nodeId) || null };
+}
+
+function collectCompletedPortfolioConstellations(state, goal) {
+  if (!goal) return [];
+  ensureStarMapState(state);
+  ensureGoalSeriesConstellations(state, goal);
+  const nodeById = new Map((goal.nodes || []).map((node) => [node.nodeId, node]));
+  const awards = [];
+  for (const map of goal.constellations || []) {
+    if (map.status !== "COMPLETED") continue;
+    if (state.starMap.collections.some((entry) => entry && entry.seriesMapId === map.mapId)) continue;
+    const tool = getConstellationReward(state.starMap.collections.length);
+    const granted = grantStarTool(state, tool);
+    const stars = (map.nodeIds || []).map((nodeId) => nodeById.get(nodeId)).filter(Boolean);
+    state.starMap.collections.unshift({
+      constellationId: allocateId(state, "constellation"),
+      seriesMapId: map.mapId,
+      goalPlanId: goal.goalId,
+      longTermGoal: goal.title,
+      stageGoalId: null,
+      title: `${map.constellationName} · ${goal.title}`,
+      description: `「${goal.title}」系列的第 ${map.order} 张星图。`,
+      completedAt: map.completedAt,
+      starCount: stars.length,
+      stars: stars.map((node) => ({ taskId: node.nodeId, title: node.title, completedAt: node.completedAt })),
+      rewardToolId: tool.id,
+      rewardToolName: tool.name,
+    });
+    awards.push({ map, tool: granted });
+  }
+  return awards;
 }
 
 function endOfDay(date) {
@@ -223,7 +660,7 @@ function buildAgent(role, state, profile) {
   };
 }
 
-function mapTasks(state, tasks, type = "main") {
+function mapTasks(state, tasks, type = "main", context = {}) {
   const now = new Date();
   return tasks.map((task, index) => {
     const estimatedMinutes = normalizeEstimatedMinutes(
@@ -241,7 +678,9 @@ function mapTasks(state, tasks, type = "main") {
       createdAt,
       deadlineAt: normalizeDeadlineAt(
         task.deadlineAt,
-        type === "side" ? addDays(now, 1) : addDays(now, index + 1)
+        context.dailyPlanId || context.scheduledDate
+          ? now
+          : type === "side" ? addDays(now, 1) : addDays(now, index + 1)
       ),
       deadlineLabel: "",
       overdueDays: 0,
@@ -249,52 +688,156 @@ function mapTasks(state, tasks, type = "main") {
       rewardGrowth: task.rewardGrowth,
       rewardResource: task.rewardResource,
       stageGoalId: task.stageGoalId || null,
+      stageTaskId: task.stageTaskId || null,
+      dailyPlanId: task.dailyPlanId || context.dailyPlanId || null,
+      scheduledDate: task.scheduledDate || context.scheduledDate || null,
+      source: task.source || context.source || (type === "side" ? "CUSTOM" : "STAGE"),
+      carryoverCount: Number(task.carryoverCount || 0),
       difficulty: Number(task.difficulty || (type === "side" ? 1 : 2)),
       narrativeHook: String(task.narrativeHook || "").trim(),
       type,
       done: false,
+      completedAt: null,
     };
   });
 }
 
-function getTaskStatus(task) {
-  return task && task.done ? "DONE" : "TODO";
+function createStarToolTask(state, options) {
+  const planDate = state.dailyPlan && state.dailyPlan.planDate
+    ? state.dailyPlan.planDate
+    : getPlanDate(new Date(), state.profile && state.profile.timeZone || DEFAULT_TIME_ZONE);
+  const dailyPlanId = state.dailyPlan && state.dailyPlan.id;
+  const [task] = mapTasks(
+    state,
+    [{
+      title: options.title,
+      detail: options.detail,
+      estimatedMinutes: options.estimatedMinutes || 10,
+      rewardGrowth: options.rewardGrowth || 6,
+      rewardResource: options.rewardResource || 6,
+      deadlineAt: options.deadlineAt,
+      dailyPlanId,
+      scheduledDate: planDate,
+      source: "CUSTOM",
+    }],
+    "side",
+    { dailyPlanId, scheduledDate: planDate, source: "CUSTOM" }
+  );
+  task.starToolId = options.toolId;
+  task.starSourceTaskId = options.sourceTaskId || null;
+  task.starReviewOffset = Number(options.reviewOffset || 0);
+  state.tasks.unshift(task);
+  if (state.dailyPlan) {
+    state.dailyPlan.taskIds.unshift(task.id);
+    state.dailyPlan.version = Number(state.dailyPlan.version || 1) + 1;
+    updateDailyPlanMetrics(state);
+  }
+  return task;
+}
+
+function materializeScheduledStarReviews(state, now = new Date()) {
+  ensureStarMapState(state);
+  const planDate = getPlanDate(now, state.profile && state.profile.timeZone || DEFAULT_TIME_ZONE);
+  let changed = false;
+  state.starMap.scheduledReviews.forEach((review) => {
+    if (!review || review.materializedTaskId || String(review.dueDate || "") > planDate) {
+      return;
+    }
+    const task = createStarToolTask(state, {
+      title: `间隔复习：${review.sourceTitle}`,
+      detail: `回忆「${review.sourceTitle}」的核心内容，再检查一个仍不确定的点。`,
+      estimatedMinutes: 10,
+      toolId: "memory-sigil",
+      sourceTaskId: review.sourceTaskId,
+      reviewOffset: review.offsetDays,
+      deadlineAt: review.dueDate,
+    });
+    review.materializedTaskId = task.id;
+    review.materializedAt = new Date().toISOString();
+    changed = true;
+  });
+  return changed;
+}
+
+function findStarToolTarget(state, taskId) {
+  const id = String(taskId || "").trim();
+  if (!id) {
+    return null;
+  }
+  const execution = [...(state.tasks || []), ...(state.taskHistory || [])]
+    .find((task) => task && task.id === id);
+  if (execution) {
+    return execution;
+  }
+  for (const goal of state.goalPortfolio && Array.isArray(state.goalPortfolio.goals)
+    ? state.goalPortfolio.goals
+    : []) {
+    const node = (goal.nodes || []).find((entry) => entry && entry.nodeId === id);
+    if (node) {
+      return {
+        id: node.nodeId,
+        title: node.title,
+        detail: node.detail,
+        done: node.status === "DONE",
+        status: node.status,
+      };
+    }
+  }
+  for (const stage of state.goalPlan && Array.isArray(state.goalPlan.stageGoals)
+    ? state.goalPlan.stageGoals
+    : []) {
+    const stageTask = (stage.tasks || []).find((task) => task && task.id === id);
+    if (stageTask) {
+      return {
+        ...stageTask,
+        done: String(stageTask.status || "").toUpperCase() === "DONE",
+      };
+    }
+  }
+  return null;
 }
 
 function refreshGoalPlanProgress(state) {
   if (!state.goalPlan || !Array.isArray(state.goalPlan.stageGoals)) {
-    return;
+    return {
+      previousStageId: null,
+      currentStageId: null,
+      stageAdvanced: false,
+      goalCompleted: false,
+    };
   }
 
+  ensureMinimumGoalPlanDepth(state, state.goalPlan);
+
+  const previousStageId = state.goalPlan.currentStageId || null;
   state.goalPlan.stageGoals.forEach((stage) => {
-    const tasks = Array.isArray(state.tasks)
-      ? state.tasks.filter((task) => task && task.stageGoalId === stage.id)
-      : [];
-    const doneCount = tasks.filter((task) => task.done).length;
+    const tasks = Array.isArray(stage.tasks) ? stage.tasks : [];
+    const doneCount = tasks.filter(
+      (task) => String(task && task.status || "TODO").toUpperCase() === "DONE"
+    ).length;
     const totalCount = tasks.length;
     stage.progress = totalCount > 0 ? Math.round((doneCount * 100) / totalCount) : Number(stage.progress || 0);
     if (totalCount > 0 && doneCount === totalCount) {
       stage.status = "DONE";
-    } else if (totalCount > 0 && (doneCount > 0 || state.goalPlan.currentStageId === stage.id)) {
-      stage.status = "IN_PROGRESS";
     } else {
-      stage.status = stage.status === "DONE" ? "DONE" : "NOT_STARTED";
+      stage.status = "NOT_STARTED";
     }
-    stage.tasks = tasks.map((task) => ({
-      id: task.id,
-      title: task.title,
-      description: task.detail,
-      stageGoalId: task.stageGoalId,
-      difficulty: Number(task.difficulty || 2),
-      estimatedMinutes: Number(task.estimatedMinutes || 0),
-      status: getTaskStatus(task),
-      rewardGrowth: Number(task.rewardGrowth || 0),
-      rewardResource: Number(task.rewardResource || 0),
-      dueDate: task.deadlineAt,
-      narrativeHook: task.narrativeHook || "",
-    }));
   });
+
+  const nextStage = state.goalPlan.stageGoals.find((stage) => stage.status !== "DONE") || null;
+  state.goalPlan.currentStageId = nextStage ? nextStage.id : null;
+  state.goalPlan.status = nextStage ? "ACTIVE" : "COMPLETED";
+  if (nextStage) {
+    nextStage.status = "IN_PROGRESS";
+  }
   state.goalPlan.updatedAt = new Date().toISOString();
+
+  return {
+    previousStageId,
+    currentStageId: state.goalPlan.currentStageId,
+    stageAdvanced: Boolean(previousStageId && state.goalPlan.currentStageId && previousStageId !== state.goalPlan.currentStageId),
+    goalCompleted: state.goalPlan.status === "COMPLETED",
+  };
 }
 
 function getCurrentStage(state) {
@@ -315,6 +858,7 @@ function assignGoalPlanIds(state, rawPlan, fallbackGoal) {
     longTermGoal: String(rawPlan.longTermGoal || fallbackGoal || "").trim(),
     goalLevel: rawPlan.goalLevel || GOAL_LEVELS.STAGE_GOAL,
     currentStageId: rawPlan.currentStageId || null,
+    status: rawPlan.status || "ACTIVE",
     clarifyingQuestions: Array.isArray(rawPlan.clarifyingQuestions) ? rawPlan.clarifyingQuestions : [],
     stageGoals: [],
     createdAt: rawPlan.createdAt || now,
@@ -326,46 +870,131 @@ function assignGoalPlanIds(state, rawPlan, fallbackGoal) {
     if (!plan.currentStageId && index === 0) {
       plan.currentStageId = stageId;
     }
+    const tasks = Array.isArray(stage.tasks) ? stage.tasks : [];
     return {
       id: stageId,
       title: String(stage.title || `阶段 ${index + 1}`).trim(),
       description: String(stage.description || "").trim(),
       progress: Number(stage.progress || 0),
       status: index === 0 ? "IN_PROGRESS" : stage.status || "NOT_STARTED",
-      tasks: Array.isArray(stage.tasks) ? stage.tasks : [],
+      tasks: tasks.map((task, taskIndex) => ({
+        id: task.id || allocateId(state, "stage-task"),
+        title: String(task.title || `任务 ${taskIndex + 1}`).trim(),
+        description: String(task.description || task.detail || "").trim(),
+        stageGoalId: stageId,
+        difficulty: Number(task.difficulty || 2),
+        estimatedMinutes: normalizeEstimatedMinutes(task.estimatedMinutes || task.estimate, 25),
+        status: String(task.status || (task.done ? "DONE" : "TODO")).toUpperCase() === "DONE" ? "DONE" : "TODO",
+        rewardGrowth: Number(task.rewardGrowth || 12),
+        rewardResource: Number(task.rewardResource || 14),
+        narrativeHook: String(task.narrativeHook || "").trim(),
+        order: Number.isFinite(Number(task.order)) ? Number(task.order) : taskIndex,
+        completedAt: task.completedAt || null,
+      })),
     };
   });
 
   return plan;
 }
 
-function flattenGoalPlanTasks(state, plan) {
-  const tasks = [];
+function buildGoalDepthTemplates(goal) {
+  const target = String(goal || "当前目标").trim() || "当前目标";
+  return [
+    {
+      title: "核心能力巩固",
+      description: `围绕“${target}”补足练习、输出与薄弱点修复。`,
+      tasks: [
+        ["完成一个代表性练习", "选择一项最能代表当前目标的练习或实际操作并完成。", 30],
+        ["修补一个薄弱环节", "找出当前最容易出错或中断的部分，完成一次针对性练习。", 25],
+        ["输出一份阶段成果", "用笔记、讲解、作品或测试结果呈现这一阶段的成果。", 30],
+      ],
+    },
+    {
+      title: "综合应用与检验",
+      description: `把“${target}”放进更完整的真实场景中进行检验。`,
+      tasks: [
+        ["完成一次综合应用", "组合已经完成的内容，完成一次综合练习或真实应用。", 35],
+        ["检查结果并修正", "检查本次结果，定位一个问题并完成修正。", 25],
+        ["复述核心方法", "不用照抄材料，用自己的话整理最关键的方法。", 20],
+      ],
+    },
+    {
+      title: "目标验收与收束",
+      description: `回到“${target}”的完成标准，确认结果并整理保持计划。`,
+      tasks: [
+        ["对照目标完成标准", "逐项检查最初的完成标准，标出已达到与仍未达到的部分。", 20],
+        ["完成最终验证", "通过综合练习、模拟测试或实际输出验证整体完成情况。", 35],
+        ["整理总结与保持计划", "总结有效方法、遗留问题，以及之后如何保持成果。", 20],
+      ],
+    },
+  ];
+}
+
+function ensureMinimumGoalPlanDepth(state, plan = state.goalPlan) {
   if (!plan || !Array.isArray(plan.stageGoals)) {
-    return tasks;
+    return false;
+  }
+  const minimumStageCount = 3;
+  const minimumTaskCount = 6;
+  let taskCount = plan.stageGoals.reduce(
+    (sum, stage) => sum + (Array.isArray(stage && stage.tasks) ? stage.tasks.length : 0),
+    0
+  );
+  if (plan.stageGoals.length >= minimumStageCount && taskCount >= minimumTaskCount) {
+    return false;
   }
 
-  plan.stageGoals.forEach((stage, stageIndex) => {
-    const taskType = stage.id === plan.currentStageId ? "main" : "side";
-    const stageTasks = Array.isArray(stage.tasks) ? stage.tasks : [];
-    const mapped = mapTasks(
-      state,
-      stageTasks.map((task) => ({
-        ...task,
-        detail: task.description || task.detail,
-        stageGoalId: stage.id,
-        deadlineAt: task.deadlineAt,
-      })),
-      taskType
-    );
-    mapped.forEach((task) => {
-      if (stageIndex > 0) {
-        task.done = false;
-      }
-      tasks.push(task);
+  const existingTitles = new Set(plan.stageGoals.map((stage) => String(stage && stage.title || "").trim()));
+  const templates = buildGoalDepthTemplates(plan.longTermGoal || (state.profile && state.profile.goal));
+  let templateIndex = 0;
+  while (plan.stageGoals.length < minimumStageCount || taskCount < minimumTaskCount) {
+    let template = templates.find((entry, index) => index >= templateIndex && !existingTitles.has(entry.title));
+    if (!template) {
+      template = templates.find((entry) => !existingTitles.has(entry.title));
+    }
+    if (!template) {
+      template = {
+        title: `延伸阶段 ${plan.stageGoals.length + 1}`,
+        description: "继续推进当前目标，避免在缺少充分验证时过早结束。",
+        tasks: [
+          ["继续一次核心行动", "围绕当前目标继续完成一个可验证的行动。", 25],
+          ["检查并修正结果", "检查行动结果并完成一次修正。", 20],
+          ["记录下一步", "写下当前结论和下一项行动。", 15],
+        ],
+      };
+    }
+    templateIndex = templates.indexOf(template) + 1;
+    const stageId = allocateId(state, "stage");
+    const tasks = template.tasks.map(([title, description, estimatedMinutes], taskIndex) => ({
+      id: allocateId(state, "stage-task"),
+      title,
+      description,
+      stageGoalId: stageId,
+      difficulty: 2,
+      estimatedMinutes,
+      status: "TODO",
+      rewardGrowth: 14,
+      rewardResource: 14,
+      narrativeHook: "一颗新的星点出现在尚未完成的目标星域中。",
+      order: taskIndex,
+      completedAt: null,
+    }));
+    plan.stageGoals.push({
+      id: stageId,
+      title: template.title,
+      description: template.description,
+      progress: 0,
+      status: "NOT_STARTED",
+      tasks,
     });
-  });
-  return tasks;
+    existingTitles.add(template.title);
+    taskCount += tasks.length;
+  }
+  plan.status = "ACTIVE";
+  if (state.transition) {
+    state.transition.needsNewGoalPrompt = false;
+  }
+  return true;
 }
 
 async function buildGoalPlanForState(state, goal, answers = []) {
@@ -380,9 +1009,32 @@ async function buildGoalPlanForState(state, goal, answers = []) {
   rawPlan.goalLevel = goalLevel;
   rawPlan.clarifyingQuestions = clarifyingQuestions;
   const plan = assignGoalPlanIds(state, rawPlan, goal);
+  plan.rollingTaskPlan = await generateRollingTaskPlan({
+    goalText: plan.longTermGoal || goal,
+    durationDays: parseGoalDurationDays(state.profile && state.profile.deadline, 30),
+    startDay: 1,
+    dayCount: Math.min(7, parseGoalDurationDays(state.profile && state.profile.deadline, 30)),
+    dailyMinutes: parseDailyMinutes(state.profile && state.profile.dailyTime, 120),
+    phases: plan.stageGoals.map((stage) => ({
+      title: stage.title,
+      description: stage.description,
+      tasks: stage.tasks.map((task) => ({ title: task.title, description: task.description })),
+    })),
+  }, { apiKey });
+  if (!Array.isArray(state.taskHistory)) {
+    state.taskHistory = [];
+  }
+  if (Array.isArray(state.tasks) && state.tasks.length > 0) {
+    state.taskHistory.unshift(...state.tasks.map((task) => ({ ...task, archivedReason: "GOAL_REPLANNED" })));
+    state.taskHistory = state.taskHistory.slice(0, 500);
+  }
+  if (state.dailyPlan) {
+    archiveCurrentDailyPlan(state);
+  }
   state.goalPlan = plan;
   state.profile.goal = plan.longTermGoal || goal;
-  state.tasks = flattenGoalPlanTasks(state, plan);
+  state.tasks = [];
+  state.dailyPlan = null;
   refreshGoalPlanProgress(state);
   return plan;
 }
@@ -396,6 +1048,389 @@ async function ensureGoalPlan(state) {
     return false;
   }
   await buildGoalPlanForState(state, state.profile.goal, []);
+  return true;
+}
+
+function findStageTask(state, stageTaskId) {
+  if (!stageTaskId || !state.goalPlan || !Array.isArray(state.goalPlan.stageGoals)) {
+    return null;
+  }
+  for (const stage of state.goalPlan.stageGoals) {
+    const task = Array.isArray(stage.tasks)
+      ? stage.tasks.find((entry) => entry && entry.id === stageTaskId)
+      : null;
+    if (task) {
+      return { stage, task };
+    }
+  }
+  return null;
+}
+
+function updateDailyPlanMetrics(state) {
+  if (!state.dailyPlan) {
+    return;
+  }
+  const taskIds = new Set(Array.isArray(state.dailyPlan.taskIds) ? state.dailyPlan.taskIds : []);
+  const tasks = Array.isArray(state.tasks)
+    ? state.tasks.filter((task) => task && taskIds.has(task.id))
+    : [];
+  const completed = tasks.filter((task) => task.done);
+  state.dailyPlan.metrics = {
+    plannedCount: tasks.length,
+    completedCount: completed.length,
+    plannedMinutes: tasks.reduce((sum, task) => sum + Number(task.estimatedMinutes || 0), 0),
+    completedMinutes: completed.reduce((sum, task) => sum + Number(task.estimatedMinutes || 0), 0),
+  };
+  state.dailyPlan.status = tasks.length > 0 && completed.length === tasks.length ? "COMPLETED" : "ACTIVE";
+  state.dailyPlan.completedAt = state.dailyPlan.status === "COMPLETED"
+    ? state.dailyPlan.completedAt || new Date().toISOString()
+    : null;
+}
+
+function archiveCurrentDailyPlan(state) {
+  if (!state.dailyPlan) {
+    return;
+  }
+  updateDailyPlanMetrics(state);
+  if (!Array.isArray(state.dailyPlanHistory)) {
+    state.dailyPlanHistory = [];
+  }
+  state.dailyPlanHistory.unshift({
+    ...clone(state.dailyPlan),
+    status: state.dailyPlan.status === "COMPLETED" ? "COMPLETED" : "EXPIRED",
+    archivedAt: new Date().toISOString(),
+  });
+  state.dailyPlanHistory = state.dailyPlanHistory.slice(0, 30);
+}
+
+function archiveCompletedExecutionTasks(state) {
+  if (!Array.isArray(state.taskHistory)) {
+    state.taskHistory = [];
+  }
+  const completed = Array.isArray(state.tasks) ? state.tasks.filter((task) => task && task.done) : [];
+  if (completed.length > 0) {
+    state.taskHistory.unshift(...completed.map((task) => ({ ...task, archivedReason: "DAILY_ROLLOVER" })));
+    state.taskHistory = state.taskHistory.slice(0, 500);
+  }
+}
+
+function buildDailyExecutionTasks(state, plannedTasks, dailyPlanId, planDate, stageId) {
+  return mapTasks(
+    state,
+    (plannedTasks || []).map((task) => ({
+      ...task,
+      detail: task.description || task.detail,
+      stageGoalId: stageId,
+      stageTaskId: task.id,
+      dailyPlanId,
+      scheduledDate: planDate,
+      source: "STAGE",
+    })),
+    "main",
+    { dailyPlanId, scheduledDate: planDate, source: "STAGE" }
+  );
+}
+
+function releasePortfolioGoalTasks(state, goal, planDate, dailyPlanId) {
+  if (!goal || goal.status !== "ACTIVE") return [];
+  ensurePortfolioGoalShape(state, goal);
+  const existingToday = (state.tasks || []).filter((task) => (
+    task && task.portfolioGoalId === goal.goalId && task.portfolioReleaseDate === planDate
+  ));
+  const releasedTodayNodes = (goal.nodes || []).filter((node) => node && node.releasedDate === planDate);
+  const firstLocked = (goal.nodes || []).find((node) => node && node.status === "LOCKED");
+  const releaseDay = releasedTodayNodes.length > 0
+    ? Number(releasedTodayNodes[0].day)
+    : firstLocked ? Number(firstLocked.day) : null;
+  if (!releaseDay) return [];
+
+  const existingMainCount = existingToday.filter((task) => task.type === "main").length;
+  const mainNodes = (goal.nodes || []).filter((node) => (
+    node && Number(node.day) === releaseDay && node.status === "LOCKED"
+  )).slice(0, Math.max(0, PORTFOLIO_MAIN_TASKS_PER_DAY - existingMainCount));
+  const mainTasks = mapTasks(
+    state,
+    mainNodes.map((node) => ({
+      title: node.title,
+      detail: node.detail,
+      estimatedMinutes: node.estimatedMinutes,
+      rewardGrowth: 14,
+      rewardResource: 14,
+      dailyPlanId,
+      scheduledDate: planDate,
+      source: "LONG_TERM",
+    })),
+    "main",
+    { dailyPlanId, scheduledDate: planDate, source: "LONG_TERM" }
+  );
+  mainTasks.forEach((task, index) => {
+    const node = mainNodes[index];
+    task.portfolioGoalId = goal.goalId;
+    task.portfolioNodeId = node.nodeId;
+    task.portfolioDay = releaseDay;
+    task.portfolioSlot = node.slot;
+    task.portfolioReleaseDate = planDate;
+    task.goalTitle = goal.title;
+    task.taskRole = node.taskRole;
+    task.taskRoleLabel = node.taskRoleLabel;
+    task.phaseId = node.phaseId;
+    task.phaseTitle = node.phaseTitle;
+    task.weeklyMilestoneId = node.weeklyMilestoneId;
+    task.weeklyMilestoneTitle = node.weeklyMilestoneTitle;
+    task.qualityScore = node.qualityScore;
+    node.status = "AVAILABLE";
+    node.releasedDate = planDate;
+  });
+
+  const existingSideCount = existingToday.filter((task) => task.type === "side").length;
+  const sideTemplates = buildPortfolioSideTasks(goal, releaseDay);
+  const sideTasks = mapTasks(
+    state,
+    sideTemplates.slice(existingSideCount, PORTFOLIO_SIDE_TASKS_PER_DAY).map((template) => ({
+      ...template,
+      estimatedMinutes: template.estimatedMinutes,
+      rewardGrowth: 6,
+      rewardResource: 8,
+      dailyPlanId,
+      scheduledDate: planDate,
+      source: "LONG_TERM_SIDE",
+    })),
+    "side",
+    { dailyPlanId, scheduledDate: planDate, source: "LONG_TERM_SIDE" }
+  );
+  sideTasks.forEach((task, index) => {
+    task.portfolioGoalId = goal.goalId;
+    task.portfolioDay = releaseDay;
+    task.portfolioReleaseDate = planDate;
+    task.goalTitle = goal.title;
+    task.taskRole = sideTemplates[index]
+      ? sideTemplates[index].taskRole
+      : "SUPPORT";
+  });
+  if (mainTasks.length > 0 || sideTasks.length > 0 || existingToday.length > 0) {
+    goal.lastReleasedDate = planDate;
+  }
+  return [...mainTasks, ...sideTasks];
+}
+
+function syncAvailableGoalTasks(state, goal) {
+  const nodeById = new Map((goal.nodes || []).map((node) => [node.nodeId, node]));
+  (state.tasks || []).forEach((task) => {
+    if (task.done || task.type !== "main" || task.portfolioGoalId !== goal.goalId) return;
+    const node = nodeById.get(task.portfolioNodeId);
+    if (!node || node.status !== "AVAILABLE") return;
+    task.title = node.title;
+    task.detail = node.detail;
+    task.estimatedMinutes = node.estimatedMinutes;
+    task.taskRole = node.taskRole;
+    task.taskRoleLabel = node.taskRoleLabel;
+    task.phaseId = node.phaseId;
+    task.phaseTitle = node.phaseTitle;
+    task.weeklyMilestoneId = node.weeklyMilestoneId;
+    task.weeklyMilestoneTitle = node.weeklyMilestoneTitle;
+    task.qualityScore = node.qualityScore;
+  });
+}
+
+async function ensureAiRollingHorizon(state, goal) {
+  if (!goal || goal.status !== "ACTIVE" || !goal.planningBlueprint) return false;
+  const firstAvailable = (goal.nodes || []).find((node) => node.status === "AVAILABLE");
+  const firstLocked = (goal.nodes || []).find((node) => node.status === "LOCKED");
+  const startDay = Number((firstAvailable || firstLocked || {}).day || goal.completedDays + 1 || 1);
+  const endDay = Math.min(Number(goal.durationDays), startDay + 6);
+  const existingDays = new Set((goal.planningBlueprint.rollingDays || []).map((entry) => Number(entry.day)));
+  const missingDays = [];
+  for (let day = startDay; day <= endDay; day += 1) if (!existingDays.has(day)) missingDays.push(day);
+  const overwriteAvailable = Boolean(goal.aiRollingUpgradePending);
+  if (!missingDays.length && !overwriteAvailable) return false;
+  const requestStart = overwriteAvailable ? startDay : missingDays[0];
+  const requestEnd = overwriteAvailable ? endDay : missingDays[missingDays.length - 1];
+  if (!overwriteAvailable && Number(goal.aiPlanningAttemptedThroughDay || 0) >= requestEnd) return false;
+  const recentExecution = [...(state.taskHistory || []), ...(state.tasks || [])]
+    .filter((task) => task.portfolioGoalId === goal.goalId)
+    .slice(-12)
+    .map((task) => ({ title: task.title, done: Boolean(task.done), estimatedMinutes: task.estimatedMinutes }));
+  const rollingPlan = await generateRollingTaskPlan({
+    goalText: goal.title,
+    durationDays: goal.durationDays,
+    startDay: requestStart,
+    dayCount: requestEnd - requestStart + 1,
+    dailyMinutes: goal.dailyBudgetMinutes,
+    phases: (goal.planningBlueprint.phases || []).map((phase) => ({
+      title: phase.title,
+      description: phase.description,
+      startDay: phase.startDay,
+      endDay: phase.endDay,
+      tasks: phase.focusItems,
+    })),
+    recentExecution,
+  }, { apiKey: getDeepseekApiKey() });
+  goal.aiPlanningAttemptedThroughDay = requestEnd;
+  if (!rollingPlan) {
+    goal.aiRollingUpgradePending = false;
+    return false;
+  }
+  applyRollingTaskPlan(goal, rollingPlan, overwriteAvailable);
+  syncAvailableGoalTasks(state, goal);
+  goal.aiRollingUpgradePending = false;
+  return true;
+}
+
+async function ensurePortfolioDailyPlan(state, options = {}) {
+  const timeZone = String(state.profile && state.profile.timeZone || DEFAULT_TIME_ZONE).trim() || DEFAULT_TIME_ZONE;
+  const planDate = getPlanDate(options.now || new Date(), timeZone);
+  if (!options.force && state.dailyPlan && state.dailyPlan.planDate === planDate) {
+    const generated = [];
+    for (const goal of state.goalPortfolio.goals || []) {
+      await ensureAiRollingHorizon(state, goal);
+      generated.push(...releasePortfolioGoalTasks(state, goal, planDate, state.dailyPlan.id));
+    }
+    if (generated.length > 0) {
+      state.tasks.push(...generated);
+      state.dailyPlan.taskIds = state.tasks
+        .filter((task) => task.dailyPlanId === state.dailyPlan.id)
+        .map((task) => task.id);
+      state.dailyPlan.version = Number(state.dailyPlan.version || 1) + 1;
+    }
+    updateDailyPlanMetrics(state);
+    return generated.length > 0;
+  }
+
+  const previousPlan = state.dailyPlan;
+  if (previousPlan) archiveCurrentDailyPlan(state);
+  archiveCompletedExecutionTasks(state);
+  const pendingTasks = (state.tasks || []).filter((task) => task && !task.done);
+  const dailyPlanId = allocateId(state, "daily-plan");
+  pendingTasks.forEach((task) => {
+    if (task.portfolioGoalId && !task.portfolioReleaseDate) {
+      const linked = findPortfolioGoalAndNode(state, task.portfolioGoalId, task.portfolioNodeId);
+      task.portfolioReleaseDate = linked.node && linked.node.releasedDate || task.scheduledDate || null;
+    }
+    task.dailyPlanId = dailyPlanId;
+    task.scheduledDate = planDate;
+    task.carryoverCount = Number(task.carryoverCount || 0) + (previousPlan ? 1 : 0);
+  });
+
+  const generated = [];
+  for (const goal of state.goalPortfolio.goals || []) {
+    if (!goal || goal.status !== "ACTIVE") continue;
+    await ensureAiRollingHorizon(state, goal);
+    if (goal.lastReleasedDate === planDate) continue;
+    generated.push(...releasePortfolioGoalTasks(state, goal, planDate, dailyPlanId));
+  }
+  state.tasks = [...pendingTasks, ...generated];
+  state.dailyPlan = {
+    id: dailyPlanId,
+    planDate,
+    goalPlanId: null,
+    stageGoalId: null,
+    status: "ACTIVE",
+    capacityMinutes: parseDailyMinutes(state.profile && state.profile.dailyTime, 120),
+    taskIds: state.tasks.map((task) => task.id),
+    source: options.source || "GOAL_PORTFOLIO",
+    version: 1,
+    message: generated.length > 0
+      ? `今天已生成 ${generated.length} 个长期目标任务。`
+      : "今天没有新的长期目标节点。",
+    generatedAt: new Date().toISOString(),
+    completedAt: null,
+    metrics: {},
+  };
+  updateDailyPlanMetrics(state);
+  return true;
+}
+
+async function ensureDailyPlan(state, options = {}) {
+  if (!state.initialized || !state.goalPlan) {
+    return false;
+  }
+  if (state.goalPortfolio && Array.isArray(state.goalPortfolio.goals) && state.goalPortfolio.goals.length > 0) {
+    return ensurePortfolioDailyPlan(state, options);
+  }
+  const timeZone = String(state.profile && state.profile.timeZone || DEFAULT_TIME_ZONE).trim() || DEFAULT_TIME_ZONE;
+  const planDate = getPlanDate(options.now || new Date(), timeZone);
+  if (!options.force && state.dailyPlan && state.dailyPlan.planDate === planDate) {
+    updateDailyPlanMetrics(state);
+    return false;
+  }
+
+  refreshGoalPlanProgress(state);
+  if (state.goalPlan.status === "COMPLETED") {
+    updateDailyPlanMetrics(state);
+    return false;
+  }
+
+  const previousPlan = state.dailyPlan;
+  if (previousPlan) {
+    archiveCurrentDailyPlan(state);
+  }
+  archiveCompletedExecutionTasks(state);
+
+  const currentStage = getCurrentStage(state);
+  const pendingTasks = Array.isArray(state.tasks)
+    ? state.tasks.filter((task) => {
+        if (!task || task.done) {
+          return false;
+        }
+        if (task.source === "CUSTOM" || task.type === "side") {
+          return true;
+        }
+        return Boolean(currentStage && task.stageGoalId === currentStage.id && findStageTask(state, task.stageTaskId));
+      })
+    : [];
+  const dailyPlanId = allocateId(state, "daily-plan");
+  pendingTasks.forEach((task) => {
+    task.dailyPlanId = dailyPlanId;
+    task.scheduledDate = planDate;
+    task.deadlineAt = normalizeDeadlineAt(planDate, new Date());
+    task.carryoverCount = Number(task.carryoverCount || 0) + (previousPlan ? 1 : 0);
+  });
+
+  const capacityMinutes = parseDailyMinutes(state.profile && state.profile.dailyTime, 120);
+  const usedMinutes = pendingTasks.reduce((sum, task) => sum + Number(task.estimatedMinutes || 0), 0);
+  const carriedStageTaskIds = new Set(pendingTasks.map((task) => task.stageTaskId).filter(Boolean));
+  const remainingStageTasks = currentStage && Array.isArray(currentStage.tasks)
+    ? currentStage.tasks
+        .filter((task) => String(task && task.status || "TODO").toUpperCase() !== "DONE")
+        .filter((task) => !carriedStageTaskIds.has(task.id))
+        .sort((left, right) => Number(left.order || 0) - Number(right.order || 0))
+    : [];
+  const pendingMainCount = pendingTasks.filter((task) => task.source === "STAGE").length;
+  const availableSlots = Math.max(0, 3 - pendingMainCount);
+  const generated = await generateDailyPlan({
+    goalPlan: state.goalPlan,
+    currentStage,
+    remainingTasks: remainingStageTasks.slice(0, availableSlots),
+    capacityMinutes: Math.max(5, capacityMinutes - usedMinutes),
+    planDate,
+    apiKey: getDeepseekApiKey(),
+  });
+  const generatedTasks = buildDailyExecutionTasks(
+    state,
+    generated.tasks.slice(0, availableSlots),
+    dailyPlanId,
+    planDate,
+    currentStage && currentStage.id
+  );
+  state.tasks = [...pendingTasks, ...generatedTasks];
+  state.dailyPlan = {
+    id: dailyPlanId,
+    planDate,
+    goalPlanId: state.goalPlan.id,
+    stageGoalId: currentStage && currentStage.id,
+    status: "ACTIVE",
+    capacityMinutes,
+    taskIds: state.tasks.map((task) => task.id),
+    source: options.source || generated.source || "AUTO",
+    version: previousPlan && previousPlan.planDate === planDate
+      ? Number(previousPlan.version || 1) + 1
+      : 1,
+    message: generated.message,
+    generatedAt: new Date().toISOString(),
+    completedAt: null,
+    metrics: {},
+  };
+  updateDailyPlanMetrics(state);
   return true;
 }
 
@@ -559,6 +1594,25 @@ function createEmptyDungeonRun() {
       resolve: 0,
     },
     totals: {
+      growth: 0,
+      resources: 0,
+    },
+    planDate: null,
+    dailyPlanId: null,
+    stageGoalId: null,
+    stageTitle: null,
+    nextStageTitle: null,
+    stageTheme: null,
+    completionRoute: null,
+    routeLabel: null,
+    plannedTaskCount: 0,
+    completedTaskCount: 0,
+    completedTaskIds: [],
+    completedTaskTitles: [],
+    demoMode: false,
+    rewardEligible: false,
+    rewardGranted: false,
+    rewardPreview: {
       growth: 0,
       resources: 0,
     },
@@ -777,7 +1831,9 @@ function getActiveDungeonNode(state) {
   return {
     nodeId: activeEvent.eventId,
     title: activeEvent.title,
-    description: activeEvent.description,
+    description: state.dungeonRun.stageTheme && state.dungeonRun.stageTheme.eventLead
+      ? `${state.dungeonRun.stageTheme.eventLead}\n\n${activeEvent.description}`
+      : activeEvent.description,
     choices: buildAvailableStoryChoices(activeEvent, state, state.dungeonRun).map((choice) => ({
       choiceId: choice.choiceId,
       label: choice.label,
@@ -812,6 +1868,23 @@ function buildDungeonRunSnapshot(state) {
     activeNode,
     endingTitle: state.dungeonRun.preparedEnding && state.dungeonRun.preparedEnding.title,
     endingSummary: state.dungeonRun.endingSummary || null,
+    planDate: state.dungeonRun.planDate || null,
+    dailyPlanId: state.dungeonRun.dailyPlanId || null,
+    stageGoalId: state.dungeonRun.stageGoalId || null,
+    stageTitle: state.dungeonRun.stageTitle || null,
+    nextStageTitle: state.dungeonRun.nextStageTitle || null,
+    stageTheme: clone(state.dungeonRun.stageTheme),
+    completionRoute: state.dungeonRun.completionRoute || null,
+    routeLabel: state.dungeonRun.routeLabel || null,
+    plannedTaskCount: Number(state.dungeonRun.plannedTaskCount || 0),
+    completedTaskCount: Number(state.dungeonRun.completedTaskCount || 0),
+    demoMode: Boolean(state.dungeonRun.demoMode),
+    rewardEligible: Boolean(state.dungeonRun.rewardEligible),
+    rewardGranted: Boolean(state.dungeonRun.rewardGranted),
+    rewardPreview: {
+      growth: Number(state.dungeonRun.rewardPreview && state.dungeonRun.rewardPreview.growth) || 0,
+      resources: Number(state.dungeonRun.rewardPreview && state.dungeonRun.rewardPreview.resources) || 0,
+    },
   };
 }
 
@@ -986,12 +2059,150 @@ function syncAgentArtifacts(state) {
   return workspace;
 }
 
+function migrateGoalPlanningState(state) {
+  let changed = false;
+  if (state.meta && Number(state.meta.version || 0) < 5) {
+    state.meta.version = 5;
+    changed = true;
+  }
+  if (!Array.isArray(state.taskHistory)) {
+    state.taskHistory = [];
+    changed = true;
+  }
+  if (!Array.isArray(state.dailyPlanHistory)) {
+    state.dailyPlanHistory = [];
+    changed = true;
+  }
+  if (!Object.prototype.hasOwnProperty.call(state, "dailyPlan")) {
+    state.dailyPlan = null;
+    changed = true;
+  }
+  if (!state.goalPlan || !Array.isArray(state.goalPlan.stageGoals)) {
+    return changed;
+  }
+
+  const previousCurrentStageId = state.goalPlan.currentStageId;
+  const customTaskIds = new Set(
+    (state.tasks || [])
+      .filter((task) => task && task.type === "side" && task.stageGoalId === previousCurrentStageId)
+      .map((task) => task.id)
+  );
+  state.goalPlan.stageGoals.forEach((stage, stageIndex) => {
+    if (!stage.id) {
+      stage.id = allocateId(state, "stage");
+      changed = true;
+    }
+    const sourceTasks = Array.isArray(stage.tasks) ? stage.tasks : [];
+    stage.tasks = sourceTasks
+      .filter((task) => !customTaskIds.has(task && task.id))
+      .map((task, taskIndex) => {
+        const matchingExecution = (state.tasks || []).find(
+          (entry) => entry && (
+            entry.stageTaskId === task.id ||
+            entry.id === task.id ||
+            (entry.stageGoalId === stage.id && entry.title === task.title)
+          )
+        );
+        const id = task.id || (matchingExecution && matchingExecution.id) || allocateId(state, "stage-task");
+        const status = String(
+          task.status || (task.done ? "DONE" : "") || (matchingExecution && matchingExecution.done ? "DONE" : "TODO")
+        ).toUpperCase() === "DONE" ? "DONE" : "TODO";
+        if (!task.id || !task.stageGoalId || !Object.prototype.hasOwnProperty.call(task, "order")) {
+          changed = true;
+        }
+        return {
+          id,
+          title: String(task.title || `任务 ${taskIndex + 1}`).trim(),
+          description: String(task.description || task.detail || "").trim(),
+          stageGoalId: stage.id,
+          difficulty: Number(task.difficulty || 2),
+          estimatedMinutes: normalizeEstimatedMinutes(task.estimatedMinutes || task.estimate, 25),
+          status,
+          rewardGrowth: Number(task.rewardGrowth || 12),
+          rewardResource: Number(task.rewardResource || 14),
+          narrativeHook: String(task.narrativeHook || "").trim(),
+          order: Number.isFinite(Number(task.order)) ? Number(task.order) : taskIndex,
+          completedAt: task.completedAt || (status === "DONE" && matchingExecution && matchingExecution.completedAt) || null,
+        };
+      });
+    if (!stage.title) {
+      stage.title = `阶段 ${stageIndex + 1}`;
+      changed = true;
+    }
+  });
+  const progressResult = refreshGoalPlanProgress(state);
+
+  if (!state.dailyPlan && Array.isArray(state.tasks) && state.tasks.length > 0) {
+    const planDate = getPlanDate(new Date(), state.profile && state.profile.timeZone || DEFAULT_TIME_ZONE);
+    const currentStage = getCurrentStage(state);
+    const keptTasks = [];
+    const archivedTasks = [];
+    state.tasks.forEach((task) => {
+      const isCustom = customTaskIds.has(task.id);
+      if (isCustom || (currentStage && task.stageGoalId === currentStage.id)) {
+        const stageMatch = isCustom || !currentStage
+          ? null
+          : currentStage.tasks.find((entry) => entry.id === task.id || entry.title === task.title);
+        keptTasks.push({
+          ...task,
+          type: isCustom ? "side" : "main",
+          stageTaskId: stageMatch ? stageMatch.id : null,
+          scheduledDate: planDate,
+          source: isCustom ? "CUSTOM" : "STAGE",
+          carryoverCount: Number(task.carryoverCount || 0),
+          completedAt: task.completedAt || (task.done ? new Date().toISOString() : null),
+        });
+      } else if (task.done) {
+        archivedTasks.push({ ...task, archivedReason: "LEGACY_MIGRATION" });
+      }
+    });
+    const dailyPlanId = allocateId(state, "daily-plan");
+    keptTasks.forEach((task) => {
+      task.dailyPlanId = dailyPlanId;
+    });
+    state.tasks = keptTasks;
+    state.taskHistory.unshift(...archivedTasks);
+    state.taskHistory = state.taskHistory.slice(0, 500);
+    state.dailyPlan = {
+      id: dailyPlanId,
+      planDate,
+      goalPlanId: state.goalPlan.id,
+      stageGoalId: currentStage && currentStage.id,
+      status: "ACTIVE",
+      capacityMinutes: parseDailyMinutes(state.profile && state.profile.dailyTime, 120),
+      taskIds: keptTasks.map((task) => task.id),
+      source: "MIGRATION",
+      version: 1,
+      message: "已保留当前阶段任务，并启用每日计划。",
+      generatedAt: new Date().toISOString(),
+      completedAt: null,
+      metrics: {},
+    };
+    updateDailyPlanMetrics(state);
+    changed = true;
+  }
+
+  if (state.transition) {
+    const shouldPrompt = Boolean(progressResult.goalCompleted);
+    if (Boolean(state.transition.needsNewGoalPrompt) !== shouldPrompt) {
+      state.transition.needsNewGoalPrompt = shouldPrompt;
+      changed = true;
+    }
+  }
+  return changed;
+}
+
 function migrateLegacyState(state) {
   if (!state.initialized || !state.agent) {
     return;
   }
 
   let changed = false;
+
+  if (state.meta && Number(state.meta.version || 0) < 8) {
+    state.meta.version = 8;
+    changed = true;
+  }
 
   if (!state.agent.agentId) {
     state.agent.agentId = allocateId(state, "agent");
@@ -1036,9 +2247,54 @@ function migrateLegacyState(state) {
       state.dungeonRun.totals = { growth: 0, resources: 0 };
       changed = true;
     }
+    const dungeonDefaults = createEmptyDungeonRun();
+    for (const key of [
+      "planDate",
+      "dailyPlanId",
+      "stageGoalId",
+      "stageTitle",
+      "nextStageTitle",
+      "stageTheme",
+      "completionRoute",
+      "routeLabel",
+      "plannedTaskCount",
+      "completedTaskCount",
+      "completedTaskIds",
+      "completedTaskTitles",
+      "demoMode",
+      "rewardEligible",
+      "rewardGranted",
+      "rewardPreview",
+    ]) {
+      if (!Object.prototype.hasOwnProperty.call(state.dungeonRun, key)) {
+        state.dungeonRun[key] = clone(dungeonDefaults[key]);
+        changed = true;
+      }
+    }
+  }
+  if (!Array.isArray(state.dungeonSettlementHistory)) {
+    state.dungeonSettlementHistory = [];
+    changed = true;
+  }
+
+  if (ensureStarMapState(state)) {
+    changed = true;
   }
 
   if (ensureRoleDerivedState(state)) {
+    changed = true;
+  }
+  if (migrateGoalPlanningState(state)) {
+    changed = true;
+  }
+  if (ensureGoalPortfolioState(state)) {
+    changed = true;
+  }
+  const portfolioAwards = state.goalPortfolio && Array.isArray(state.goalPortfolio.goals)
+    ? state.goalPortfolio.goals.flatMap((goal) => collectCompletedPortfolioConstellations(state, goal))
+    : [];
+  if (portfolioAwards.length > 0
+    || ((!state.goalPortfolio || state.goalPortfolio.goals.length === 0) && collectCompletedConstellations(state).length > 0)) {
     changed = true;
   }
 
@@ -1083,7 +2339,11 @@ function resetSessionState(state) {
   state.lastStory = null;
   state.lastRewardSummary = null;
   state.tasks = [];
+  state.taskHistory = [];
   state.goalPlan = null;
+  state.dailyPlan = null;
+  state.dailyPlanHistory = [];
+  state.goalPortfolio = { version: 1, goals: [] };
   state.nextSuggestion = null;
   state.diary = [];
   state.skillState = {
@@ -1114,6 +2374,8 @@ function resetSessionState(state) {
     },
   };
   state.dungeonRun = createEmptyDungeonRun();
+  state.dungeonSettlementHistory = [];
+  state.starMap = createEmptyStarMap();
   state.inventory = [];
   state.shop = defaultShop.map((item) => ({ ...item }));
   state.transition = {
@@ -1129,10 +2391,16 @@ async function getCurrentSessionState() {
   const state = getState();
   migrateLegacyState(state);
   const goalPlanChanged = await ensureGoalPlan(state);
+  const portfolioChanged = ensureGoalPortfolioState(state);
+  const constellationChanged = state.goalPortfolio && state.goalPortfolio.goals.length > 0
+    ? state.goalPortfolio.goals.flatMap((goal) => collectCompletedPortfolioConstellations(state, goal)).length > 0
+    : collectCompletedConstellations(state).length > 0;
+  const reviewChanged = materializeScheduledStarReviews(state);
+  const dailyPlanChanged = await ensureDailyPlan(state);
   const overdueChanged = ensureTaskDeadlines(state);
   const narrativeChanged = syncOverdueNarrative(state);
   refreshGoalPlanProgress(state);
-  if (goalPlanChanged || overdueChanged || narrativeChanged) {
+  if (goalPlanChanged || portfolioChanged || constellationChanged || reviewChanged || dailyPlanChanged || overdueChanged || narrativeChanged) {
     saveStore();
   }
 
@@ -1143,9 +2411,14 @@ async function getCurrentSessionState() {
     stats: state.stats,
     agent: state.agent,
     tasks: state.tasks,
+    taskHistory: state.taskHistory,
     goalPlan: state.goalPlan,
+    goalPortfolio: state.goalPortfolio,
+    dailyPlan: state.dailyPlan,
+    dailyPlanHistory: state.dailyPlanHistory,
     nextSuggestion: state.nextSuggestion,
     diary: state.diary,
+    starMap: state.starMap,
     inventory: state.inventory,
     shop: state.shop,
     transition: state.transition,
@@ -1240,9 +2513,6 @@ async function createSession(payload) {
     { id: "deadline", question: "距离关键节点或截止日期还有多久？", answer: profile.deadline },
     { id: "dailyTime", question: "每天大约能稳定投入几小时？", answer: profile.dailyTime },
   ]);
-  if (!Array.isArray(state.tasks) || state.tasks.length === 0) {
-    state.tasks = mapTasks(state, blueprint.tasks);
-  }
   state.openingNarrative = blueprint.openingStory;
   state.lastStory = blueprint.openingStory;
   state.lastRewardSummary = "获得初始成长值 +58，资源点 +92";
@@ -1279,6 +2549,12 @@ async function createSession(payload) {
     storyAsset: openingAsset,
   });
 
+  // Finish all asynchronous world/plan generation before committing the
+  // account. A failed initialization must not leave a login-only ghost account.
+  ensureGoalPortfolioState(state);
+  await ensureDailyPlan(state, { source: "SESSION_CREATED" });
+  syncAgentArtifacts(state);
+
   const accountRecord = registerAccount({
     account,
     password,
@@ -1287,7 +2563,6 @@ async function createSession(payload) {
   state.profile.userId = accountRecord.userId;
   state.profile.account = accountRecord.account;
 
-  syncAgentArtifacts(state);
   saveStore();
 
   return {
@@ -1363,8 +2638,41 @@ async function completeTask(taskId) {
     rewardGrowth: baseRewardGrowth,
   };
   task.done = true;
+  task.completedAt = new Date().toISOString();
   task.overdueDays = 0;
   task.debuffActive = false;
+  let stageProgress = {
+    previousStageId: null,
+    currentStageId: null,
+    stageAdvanced: false,
+    goalCompleted: false,
+  };
+  let constellationAwards = [];
+  if (task.portfolioGoalId && task.portfolioNodeId) {
+    const { goal, node } = findPortfolioGoalAndNode(state, task.portfolioGoalId, task.portfolioNodeId);
+    if (!goal || !node) throw new Error("长期目标日节点不存在");
+    node.status = "DONE";
+    node.completedAt = task.completedAt;
+    refreshPortfolioGoalMetrics(goal);
+    if (goal.status === "COMPLETED") {
+      goal.completedAt = task.completedAt;
+    }
+    constellationAwards = collectCompletedPortfolioConstellations(state, goal)
+      .map((award) => ({ title: `${award.map.constellationName} · ${goal.title}`, tool: award.tool }));
+    state.transition.needsNewGoalPrompt = false;
+  } else if (task.portfolioGoalId) {
+    // Goal-linked side quests belong to today's five-task group but never light a star.
+    state.transition.needsNewGoalPrompt = false;
+  } else {
+    const linkedStageTask = findStageTask(state, task.stageTaskId);
+    if (linkedStageTask) {
+      linkedStageTask.task.status = "DONE";
+      linkedStageTask.task.completedAt = task.completedAt;
+    }
+    stageProgress = refreshGoalPlanProgress(state);
+    constellationAwards = collectCompletedConstellations(state);
+  }
+  updateDailyPlanMetrics(state);
 
   const skillResolution = evaluateTriggeredSkills({
     role,
@@ -1388,8 +2696,7 @@ async function completeTask(taskId) {
   const levelUps = calculateLevelUps(state);
   const characterArc = applyAgentArcState(state);
 
-  const mainTasks = state.tasks.filter((entry) => entry.type === "main");
-  const allMainDone = mainTasks.length > 0 && mainTasks.every((entry) => entry.done);
+  const allMainDone = stageProgress.goalCompleted;
   const skillEffectSummary = buildSkillEffectSummary(skillResolution);
   const narrativeContext = buildNarrativeContext(state);
   const storyAsset = selectEventStoryAsset(state, {
@@ -1421,9 +2728,13 @@ async function completeTask(taskId) {
     storyAsset,
   });
 
+  const constellationRewardText = constellationAwards.length > 0
+    ? ` / 星宿「${constellationAwards[0].title}」已收录，获得${constellationAwards[0].tool.name} ×1`
+    : "";
   const rewardSummary =
     buildRewardSummary(baseRewardGrowth, task.rewardResource, skillResolution) +
-    (overdueDays > 0 ? ` / 超时 Debuff：已超时 ${overdueDays} 天，成长值按 70% 结算` : "");
+    (overdueDays > 0 ? ` / 超时 Debuff：已超时 ${overdueDays} 天，成长值按 70% 结算` : "") +
+    constellationRewardText;
   const touchedWorldEntities = upsertWorldEntities(state.worldState, story.worldEntities || [], {
     sourceSeasonId: state.agent.currentSeasonId,
     sourceTaskId: task.id,
@@ -1460,6 +2771,29 @@ async function completeTask(taskId) {
   });
 
   let chapterFinaleResult = null;
+  if (stageProgress.stageAdvanced) {
+    const previousStage = state.goalPlan.stageGoals.find((stage) => stage.id === stageProgress.previousStageId);
+    const nextStage = getCurrentStage(state);
+    const transitionText = `阶段「${previousStage ? previousStage.title : "上一阶段"}」已完成，主线自动进入「${nextStage ? nextStage.title : "下一阶段"}」。`;
+    state.transition.needsNewGoalPrompt = false;
+    state.agent.mainline = nextStage
+      ? `当前阶段：${nextStage.title}。完成该阶段全部必做任务后将自动继续推进。`
+      : state.agent.mainline;
+    state.agent.stage = "stage-advanced";
+    state.agent.emotion = "前进";
+    createDiaryEntry(state, {
+      title: "主线阶段推进",
+      body: transitionText,
+      reward: "下一阶段已解锁",
+    });
+    createMemoryEntry(state, {
+      type: "stage_advanced",
+      title: `进入阶段：${nextStage ? nextStage.title : "下一阶段"}`,
+      memorySummary: transitionText,
+      storyText: transitionText,
+      reward: "目标路线继续推进",
+    });
+  }
   if (allMainDone) {
     const finaleContext = buildNarrativeContext(state);
     chapterFinaleResult = await generateChapterFinale({
@@ -1500,30 +2834,34 @@ async function completeTask(taskId) {
 
     state.transition.needsNewGoalPrompt = true;
     state.transition.promptVersion += 1;
-    state.agent.mainline = "当前阶段主线已经完成，请立即输入下一阶段新目标以生成新的主线任务。";
-    state.agent.chapter = `${role.chapter} · 当前阶段已完成`;
+    state.agent.mainline = "长期目标的全部阶段已经完成，可以输入下一项长期目标开启新的主线。";
+    state.agent.chapter = `${role.chapter} · 长期目标已完成`;
     state.agent.stage = "awaiting-next-goal";
     state.agent.emotion = "期待";
 
     createDiaryEntry(state, {
-      title: "主线阶段完成",
-      body: "当前阶段的主线任务已经全部完成，章节终章已生成。系统将弹出输入框，要求用户录入下一阶段目标并开启新的剧情章节。",
-      reward: "等待输入新的主线目标",
+      title: "长期目标完成",
+      body: "长期目标中的全部阶段任务已经完成，章节终章已生成。系统将邀请用户输入下一项长期目标。",
+      reward: "等待输入新的长期目标",
     });
 
     createMemoryEntry(state, {
       type: "mainline_complete",
-      title: "当前阶段主线完成",
-      memorySummary: "本阶段主线完成，等待新的阶段目标",
-      storyText: "本阶段主线已经全部完成，系统需要用户输入新的阶段目标。",
-      reward: "等待新的主线目标",
+      title: "长期目标主线完成",
+      memorySummary: "长期目标全部完成，等待新的长期目标",
+      storyText: "长期目标中的全部阶段已经完成，可以开启一条新的长期目标主线。",
+      reward: "等待新的长期目标",
     });
   }
 
   refreshGoalPlanProgress(state);
-  state.nextSuggestion = await planNextSuggestion(state.goalPlan, task, state.stats, {
-    apiKey: getDeepseekApiKey(),
-  });
+  state.nextSuggestion = task.portfolioNodeId
+    ? `「${task.goalTitle}」的一颗主线星已点亮，今日共有 ${PORTFOLIO_MAIN_TASKS_PER_DAY} 颗可完成。`
+    : task.portfolioGoalId
+      ? `「${task.goalTitle}」的今日支线已完成，支线不计入星图进度。`
+    : await planNextSuggestion(state.goalPlan, task, state.stats, {
+        apiKey: getDeepseekApiKey(),
+      });
   syncAgentArtifacts(state);
   state.lastStory = chapterFinaleResult
     ? `${story.storyText}\n\n【章节大结局】\n${chapterFinaleResult.chapterFinale}`
@@ -1561,7 +2899,9 @@ async function createTask(payload) {
   if (!trimmed) {
     throw new Error("支线任务内容不能为空");
   }
-  const currentStage = getCurrentStage(state);
+  const planDate = state.dailyPlan && state.dailyPlan.planDate
+    ? state.dailyPlan.planDate
+    : getPlanDate(new Date(), state.profile && state.profile.timeZone || DEFAULT_TIME_ZONE);
 
   state.tasks.unshift(
     ...mapTasks(
@@ -1574,14 +2914,29 @@ async function createTask(payload) {
           deadlineAt: payload && payload.deadlineAt,
           rewardGrowth: 10,
           rewardResource: 12,
-          stageGoalId: payload && payload.stageGoalId ? payload.stageGoalId : currentStage && currentStage.id,
+          stageGoalId: null,
+          stageTaskId: null,
+          dailyPlanId: state.dailyPlan && state.dailyPlan.id,
+          scheduledDate: planDate,
+          source: "CUSTOM",
           difficulty: 1,
           narrativeHook: "一条新的支线补给路标出现在目标地图上。",
         },
       ],
-      "side"
+      "side",
+      {
+        dailyPlanId: state.dailyPlan && state.dailyPlan.id,
+        scheduledDate: planDate,
+        source: "CUSTOM",
+      }
     )
   );
+  if (state.dailyPlan) {
+    state.dailyPlan.taskIds = state.tasks
+      .filter((task) => task.dailyPlanId === state.dailyPlan.id)
+      .map((task) => task.id);
+    updateDailyPlanMetrics(state);
+  }
   refreshGoalPlanProgress(state);
 
   const role = getRole(state.selectedRoleId);
@@ -1634,6 +2989,67 @@ async function createTask(payload) {
   };
 }
 
+async function createParallelGoal(payload) {
+  const state = getState();
+  ensureInitialized(state);
+  migrateLegacyState(state);
+  ensureGoalPortfolioState(state);
+  const title = String(payload && (payload.title || payload.goal) || "").trim();
+  const durationDays = parseGoalDurationDays(payload && (payload.durationDays || payload.deadline), 30);
+  if (!title) throw new Error("长期目标不能为空");
+  if ((state.goalPortfolio.goals || []).some((goal) => goal && goal.status === "ACTIVE" && goal.title === title)) {
+    throw new Error("该长期目标已经在进行中");
+  }
+
+  const rawPlan = await generateGoalPlan(title, [
+    { id: "deadline", question: "计划持续多久？", answer: `${durationDays} 天` },
+    { id: "dailyTime", question: "每天投入多久？", answer: state.profile.dailyTime || "25 分钟" },
+  ], { apiKey: getDeepseekApiKey() });
+  rawPlan.rollingTaskPlan = await generateRollingTaskPlan({
+    goalText: title,
+    durationDays,
+    startDay: 1,
+    dayCount: Math.min(7, durationDays),
+    dailyMinutes: parseDailyMinutes(state.profile && state.profile.dailyTime, 120),
+    phases: (rawPlan.stageGoals || []).map((stage) => ({
+      title: stage.title,
+      description: stage.description,
+      tasks: (stage.tasks || []).map((task) => ({ title: task.title, description: task.description })),
+    })),
+  }, { apiKey: getDeepseekApiKey() });
+  const goal = buildPortfolioGoal(state, {
+    title,
+    durationDays,
+    plan: rawPlan,
+    constellationIndex: state.goalPortfolio.goals.length,
+  });
+  state.goalPortfolio.goals.push(goal);
+
+  const planDate = getPlanDate(new Date(), state.profile && state.profile.timeZone || DEFAULT_TIME_ZONE);
+  if (state.dailyPlan && state.dailyPlan.planDate === planDate) {
+    const tasks = releasePortfolioGoalTasks(state, goal, planDate, state.dailyPlan.id);
+    if (tasks.length > 0) {
+      state.tasks.push(...tasks);
+      state.dailyPlan.taskIds.push(...tasks.map((task) => task.id));
+      state.dailyPlan.version = Number(state.dailyPlan.version || 1) + 1;
+      updateDailyPlanMetrics(state);
+    }
+  } else {
+    await ensurePortfolioDailyPlan(state, { source: "GOAL_ADDED" });
+  }
+  state.transition.needsNewGoalPrompt = false;
+  state.agent.emotion = "期待";
+  state.lastStory = `长期目标「${title}」已加入并行星图。`;
+  state.lastRewardSummary = `${durationDays} 个日节点 · ${goal.constellationName}`;
+  saveStore();
+  return {
+    tag: "goal.created.parallel",
+    title: "长期目标已加入",
+    storyText: state.lastStory,
+    rewardSummary: state.lastRewardSummary,
+  };
+}
+
 function updateTask(taskId, payload) {
   const state = getState();
   ensureInitialized(state);
@@ -1663,6 +3079,13 @@ function updateTask(taskId, payload) {
   task.deadlineLabel = formatDeadlineLabel(task.deadlineAt);
   task.overdueDays = getOverdueDays(task);
   task.debuffActive = task.overdueDays > 0;
+  const linkedStageTask = findStageTask(state, task.stageTaskId);
+  if (linkedStageTask) {
+    linkedStageTask.task.title = task.title;
+    linkedStageTask.task.description = task.detail;
+    linkedStageTask.task.estimatedMinutes = task.estimatedMinutes;
+  }
+  updateDailyPlanMetrics(state);
   const storyAsset = selectEventStoryAsset(state, {
     eventTag: "task.updated",
     phase: "focus",
@@ -1685,17 +3108,57 @@ function updateTask(taskId, payload) {
 }
 
 function addPlannedTasksToState(state, rawTasks, stageId, type = "main") {
+  const stage = state.goalPlan && Array.isArray(state.goalPlan.stageGoals)
+    ? state.goalPlan.stageGoals.find((entry) => entry && entry.id === stageId)
+    : null;
+  if (!stage) {
+    return [];
+  }
+  const startOrder = Array.isArray(stage.tasks) ? stage.tasks.length : 0;
+  const canonicalTasks = (rawTasks || []).map((task, index) => ({
+    id: allocateId(state, "stage-task"),
+    title: String(task.title || `任务 ${startOrder + index + 1}`).trim(),
+    description: String(task.description || task.detail || "").trim(),
+    stageGoalId: stageId,
+    difficulty: Number(task.difficulty || 2),
+    estimatedMinutes: normalizeEstimatedMinutes(task.estimatedMinutes || task.estimate, 25),
+    status: "TODO",
+    rewardGrowth: Number(task.rewardGrowth || 12),
+    rewardResource: Number(task.rewardResource || 14),
+    narrativeHook: String(task.narrativeHook || "").trim(),
+    order: startOrder + index,
+    completedAt: null,
+  }));
+  stage.tasks.push(...canonicalTasks);
+  const planDate = state.dailyPlan && state.dailyPlan.planDate
+    ? state.dailyPlan.planDate
+    : getPlanDate(new Date(), state.profile && state.profile.timeZone || DEFAULT_TIME_ZONE);
   const mapped = mapTasks(
     state,
-    (rawTasks || []).map((task) => ({
+    canonicalTasks.map((task) => ({
       ...task,
-      detail: task.description || task.detail,
+      detail: task.description,
       stageGoalId: stageId,
-      deadlineAt: task.deadlineAt,
+      stageTaskId: task.id,
+      dailyPlanId: state.dailyPlan && state.dailyPlan.id,
+      scheduledDate: planDate,
+      source: "STAGE",
     })),
-    type
+    type,
+    {
+      dailyPlanId: state.dailyPlan && state.dailyPlan.id,
+      scheduledDate: planDate,
+      source: "STAGE",
+    }
   );
   state.tasks.unshift(...mapped);
+  if (state.dailyPlan) {
+    state.dailyPlan.taskIds = state.tasks
+      .filter((task) => task.dailyPlanId === state.dailyPlan.id)
+      .map((task) => task.id);
+    state.dailyPlan.version = Number(state.dailyPlan.version || 1) + 1;
+    updateDailyPlanMetrics(state);
+  }
   refreshGoalPlanProgress(state);
   return mapped;
 }
@@ -1738,18 +3201,63 @@ async function replanGoalTasks(payload) {
     { apiKey: getDeepseekApiKey() }
   );
   const stageId = (targetTask && targetTask.stageGoalId) || (currentStage && currentStage.id);
+  const stage = state.goalPlan.stageGoals.find((entry) => entry && entry.id === stageId);
+  const targetIsCustom = Boolean(targetTask && (targetTask.source === "CUSTOM" || !targetTask.stageTaskId));
 
-  if (result.mode === "replace_task" && targetTask && !targetTask.done) {
+  if (targetIsCustom && targetTask && !targetTask.done) {
     state.tasks = state.tasks.filter((task) => task && task.id !== targetTask.id);
-  }
-
-  if (result.mode === "replace_today") {
-    state.tasks = state.tasks.filter(
-      (task) => task && (task.done || (stageId && task.stageGoalId !== stageId))
+    const planDate = state.dailyPlan && state.dailyPlan.planDate
+      ? state.dailyPlan.planDate
+      : getPlanDate(new Date(), state.profile && state.profile.timeZone || DEFAULT_TIME_ZONE);
+    const replacements = mapTasks(
+      state,
+      result.tasks.map((task) => ({
+        ...task,
+        detail: task.description || task.detail,
+        stageGoalId: null,
+        stageTaskId: null,
+        dailyPlanId: state.dailyPlan && state.dailyPlan.id,
+        scheduledDate: planDate,
+        source: "CUSTOM",
+      })),
+      "side",
+      {
+        dailyPlanId: state.dailyPlan && state.dailyPlan.id,
+        scheduledDate: planDate,
+        source: "CUSTOM",
+      }
     );
-  }
+    state.tasks.unshift(...replacements);
+    if (state.dailyPlan) {
+      state.dailyPlan.taskIds = state.tasks.map((task) => task.id);
+      state.dailyPlan.version = Number(state.dailyPlan.version || 1) + 1;
+      updateDailyPlanMetrics(state);
+    }
+  } else {
+    if (result.mode === "replace_task" && targetTask && !targetTask.done) {
+      state.tasks = state.tasks.filter((task) => task && task.id !== targetTask.id);
+      if (stage && targetTask.stageTaskId) {
+        stage.tasks = stage.tasks.filter((task) => task && task.id !== targetTask.stageTaskId);
+      }
+    }
 
-  addPlannedTasksToState(state, result.tasks, stageId, "main");
+    if (result.mode === "replace_today") {
+      const removedStageTaskIds = new Set(
+        state.tasks
+          .filter((task) => task && !task.done && task.source === "STAGE" && task.stageGoalId === stageId)
+          .map((task) => task.stageTaskId)
+          .filter(Boolean)
+      );
+      state.tasks = state.tasks.filter(
+        (task) => task && (task.done || task.source === "CUSTOM" || (stageId && task.stageGoalId !== stageId))
+      );
+      if (stage) {
+        stage.tasks = stage.tasks.filter((task) => !removedStageTaskIds.has(task.id));
+      }
+    }
+
+    addPlannedTasksToState(state, result.tasks, stageId, "main");
+  }
   state.agent.emotion = "调整";
   state.lastStory = result.message || "今日任务已根据目标地图重新规划。";
   state.lastRewardSummary = "目标编排已更新";
@@ -1826,14 +3334,29 @@ function getCurrentDungeonStatus(demoMode) {
   };
 }
 
-function startDungeonRun(demoMode) {
+function hasDungeonRewardForPlan(state, context) {
+  const history = Array.isArray(state.dungeonSettlementHistory) ? state.dungeonSettlementHistory : [];
+  return history.some((entry) => {
+    if (!entry || !entry.rewardGranted) {
+      return false;
+    }
+    if (context.dailyPlanId && entry.dailyPlanId) {
+      return entry.dailyPlanId === context.dailyPlanId;
+    }
+    return Boolean(context.planDate && entry.planDate === context.planDate);
+  });
+}
+
+function startDungeonRun(demoMode, options = {}) {
   const state = getState();
   ensureInitialized(state);
   migrateLegacyState(state);
   const storyline = getDungeonStoryline(state.selectedRoleId);
+  const learningContext = buildDungeonLearningContext(state);
+  const rewardPreview = calculateDungeonReward(learningContext);
 
   const timeState = getDungeonState(Boolean(demoMode));
-  if (!timeState.unlocked) {
+  if (!timeState.unlocked && !options.ignoreTime) {
     throw new Error("副本尚未开放，默认每天 22:00 开启");
   }
   if (state.dungeonRun && state.dungeonRun.active) {
@@ -1846,31 +3369,51 @@ function startDungeonRun(demoMode) {
   state.dungeonRun.startedAt = new Date().toISOString();
   state.dungeonRun.totalNodes = Number(storyline.maxScenes || 4);
   state.dungeonRun.storylineId = storyline.roleId;
-  state.dungeonRun.lineName = storyline.lineName;
-  state.dungeonRun.chapterTitle = storyline.chapterTitle;
+  state.dungeonRun.lineName = learningContext.stageTheme.name;
+  state.dungeonRun.chapterTitle = `${learningContext.stageTitle} · ${learningContext.routeLabel}`;
   state.dungeonRun.stateLabels = clone(storyline.stateLabels || {});
   state.dungeonRun.currentEventId = storyline.startEventId;
   state.dungeonRun.visitedEventIds = [storyline.startEventId];
   state.dungeonRun.routeState = createInitialDungeonRouteState(state);
   state.dungeonRun.flags = buildInitialDungeonFlags(state);
-  state.dungeonRun.recentOutcome = storyline.chapterIntro;
+  state.dungeonRun.planDate = learningContext.planDate;
+  state.dungeonRun.dailyPlanId = learningContext.dailyPlanId;
+  state.dungeonRun.stageGoalId = learningContext.stageGoalId;
+  state.dungeonRun.stageTitle = learningContext.stageTitle;
+  state.dungeonRun.nextStageTitle = learningContext.nextStageTitle;
+  state.dungeonRun.stageTheme = clone(learningContext.stageTheme);
+  state.dungeonRun.completionRoute = learningContext.route;
+  state.dungeonRun.routeLabel = learningContext.routeLabel;
+  state.dungeonRun.plannedTaskCount = learningContext.plannedTaskCount;
+  state.dungeonRun.completedTaskCount = learningContext.completedTaskCount;
+  state.dungeonRun.completedTaskIds = [...learningContext.completedTaskIds];
+  state.dungeonRun.completedTaskTitles = [...learningContext.completedTaskTitles];
+  state.dungeonRun.demoMode = Boolean(demoMode);
+  state.dungeonRun.rewardEligible = !demoMode && !hasDungeonRewardForPlan(state, learningContext);
+  state.dungeonRun.rewardPreview = state.dungeonRun.rewardEligible
+    ? clone(rewardPreview)
+    : { growth: 0, resources: 0 };
+  const openingStory = `${learningContext.stageTheme.eventLead} 今夜将以「${learningContext.routeLabel}」映照你当天的真实推进。`;
+  state.dungeonRun.recentOutcome = openingStory;
 
   state.agent.stage = "dungeon-running";
   state.agent.emotion = "出征";
-  state.lastStory = storyline.chapterIntro;
-  state.lastRewardSummary = `夜幕章节已开启：${storyline.chapterTitle}`;
+  state.lastStory = openingStory;
+  state.lastRewardSummary = state.dungeonRun.rewardEligible
+    ? `正式副本已开启：${state.dungeonRun.chapterTitle}`
+    : `${demoMode ? "演示" : "重玩"}副本已开启，本轮不重复发放正式奖励`;
   const storyAsset = selectEventStoryAsset(state, {
     eventTag: "dungeon.entered",
     phase: "opening",
-    text: `${storyline.lineName} ${storyline.chapterTitle} ${storyline.chapterIntro}`,
+    text: `${state.dungeonRun.lineName} ${state.dungeonRun.chapterTitle} ${openingStory}`,
   });
 
   saveStore();
 
   return {
     tag: "dungeon.entered",
-    title: `进入${storyline.lineName}`,
-    storyText: storyline.chapterIntro,
+    title: `进入${state.dungeonRun.lineName}`,
+    storyText: openingStory,
     rewardSummary: `本轮共有 ${state.dungeonRun.totalNodes} 幕关键抉择`,
     storyAsset,
   };
@@ -1900,17 +3443,11 @@ function resolveDungeonEvent(choiceId) {
   }
 
   const effects = selectedChoice.effects || {};
-  const growthDelta = Number(effects.growth || 0);
-  const resourceDelta = Number(effects.resources || 0);
   const insightDelta = Number(effects.insight || 0);
   const bondDelta = Number(effects.bond || 0);
   const resolveDelta = Number(effects.resolve || 0);
   const labels = buildDungeonStateLabels(storyline, state.dungeonRun);
 
-  state.stats.growth += growthDelta;
-  state.stats.resources += resourceDelta;
-  state.dungeonRun.totals.growth += growthDelta;
-  state.dungeonRun.totals.resources += resourceDelta;
   state.dungeonRun.routeState.insight += insightDelta;
   state.dungeonRun.routeState.bond += bondDelta;
   state.dungeonRun.routeState.resolve += resolveDelta;
@@ -1928,13 +3465,10 @@ function resolveDungeonEvent(choiceId) {
     choiceId: selectedChoice.choiceId,
     choiceLabel: selectedChoice.label,
     outcome: selectedChoice.outcome,
-    growth: growthDelta,
-    resources: resourceDelta,
-    routeSummary: buildDungeonRewardSummary(effects, labels),
+    growth: 0,
+    resources: 0,
+    routeSummary: buildDungeonRewardSummary({ insight: insightDelta, bond: bondDelta, resolve: resolveDelta }, labels),
   });
-
-  const levelUps = calculateLevelUps(state);
-  applyAgentArcState(state);
 
   const nextIndex = state.dungeonRun.currentIndex + 1;
   state.dungeonRun.currentIndex = nextIndex;
@@ -1951,18 +3485,14 @@ function resolveDungeonEvent(choiceId) {
       state.dungeonRun.preparedEnding ? state.dungeonRun.preparedEnding.direction : "夜幕已闭合"
     }`;
     state.lastStory = selectedChoice.outcome;
-    state.lastRewardSummary = `${buildDungeonRewardSummary(effects, labels)}；${state.dungeonRun.endingSummary}`;
+    state.lastRewardSummary = `${buildDungeonRewardSummary({ insight: insightDelta, bond: bondDelta, resolve: resolveDelta }, labels)}；${state.dungeonRun.endingSummary}`;
   } else {
     state.dungeonRun.currentEventId = selectedChoice.nextEventId;
     if (selectedChoice.nextEventId && !state.dungeonRun.visitedEventIds.includes(selectedChoice.nextEventId)) {
       state.dungeonRun.visitedEventIds.push(selectedChoice.nextEventId);
     }
     state.lastStory = selectedChoice.outcome;
-    state.lastRewardSummary = buildDungeonRewardSummary(effects, labels);
-  }
-
-  if (levelUps > 0) {
-    state.lastRewardSummary += `；角色升至 Lv.${state.stats.level}`;
+    state.lastRewardSummary = buildDungeonRewardSummary({ insight: insightDelta, bond: bondDelta, resolve: resolveDelta }, labels);
   }
 
   const storyAsset = selectEventStoryAsset(state, {
@@ -1978,17 +3508,17 @@ function resolveDungeonEvent(choiceId) {
     tag: "dungeon.event.resolved",
     title: `事件完成：${activeEvent.title}`,
     storyText: selectedChoice.outcome,
-    rewardSummary: buildDungeonRewardSummary(effects, labels),
+    rewardSummary: buildDungeonRewardSummary({ insight: insightDelta, bond: bondDelta, resolve: resolveDelta }, labels),
     rewardDelta: {
-      growth: growthDelta,
-      resources: resourceDelta,
+      growth: 0,
+      resources: 0,
     },
     characterArc: getCurrentCharacterArc(state),
     storyAsset,
   };
 }
 
-function settleDungeonRun() {
+async function settleDungeonRun() {
   const state = getState();
   ensureInitialized(state);
   migrateLegacyState(state);
@@ -1997,57 +3527,103 @@ function settleDungeonRun() {
     throw new Error("副本尚未完成全部事件节点，无法结算");
   }
 
-  const storyline = getDungeonStoryline(state.dungeonRun.storylineId || state.selectedRoleId);
   const ending = state.dungeonRun.preparedEnding;
   if (!ending) {
     throw new Error("当前结局信息缺失，请重新开始本轮副本");
   }
 
-  const endingGrowth = Number(ending.rewardDelta && ending.rewardDelta.growth) || 0;
-  const endingResources = Number(ending.rewardDelta && ending.rewardDelta.resources) || 0;
-  state.stats.growth += endingGrowth;
-  state.stats.resources += endingResources;
-  state.dungeonRun.totals.growth += endingGrowth;
-  state.dungeonRun.totals.resources += endingResources;
-  const levelUps = calculateLevelUps(state);
-  applyAgentArcState(state);
-
-  const totals = {
-    growth: Number(state.dungeonRun.totals && state.dungeonRun.totals.growth) || 0,
-    resources: Number(state.dungeonRun.totals && state.dungeonRun.totals.resources) || 0,
-  };
+  const settlingRunId = state.dungeonRun.runId;
   const routeRecap = state.dungeonRun.history
     .map((entry, index) => `${index + 1}. ${entry.nodeTitle}：${entry.choiceLabel}`)
     .join("\n");
-  const settleStory = `${ending.storyText}\n\n【本轮抉择】\n${routeRecap}\n\n【章节归档】\n${
-    storyline.chapterTitle
-  } 已闭合，你带回了累计成长值 +${totals.growth}、资源点 +${totals.resources} 的夜行成果。`;
+  const narrative = await generateDungeonSettlementNarrative(
+    {
+      goalTitle: state.goalPlan && (state.goalPlan.longTermGoal || state.goalPlan.title),
+      stageTitle: state.dungeonRun.stageTitle,
+      nextStageTitle: state.dungeonRun.nextStageTitle,
+      stageThemeName: state.dungeonRun.stageTheme && state.dungeonRun.stageTheme.name,
+      routeLabel: state.dungeonRun.routeLabel,
+      completedTaskCount: state.dungeonRun.completedTaskCount,
+      completedTaskTitles: state.dungeonRun.completedTaskTitles,
+      endingTitle: ending.title,
+      endingStory: ending.storyText,
+      routeRecap,
+    },
+    { apiKey: getDeepseekApiKey() }
+  );
+
+  if (!state.dungeonRun || state.dungeonRun.runId !== settlingRunId || !state.dungeonRun.readyToSettle) {
+    throw new Error("本轮副本已经结算，请勿重复提交");
+  }
+
+  const settlementKey = {
+    dailyPlanId: state.dungeonRun.dailyPlanId,
+    planDate: state.dungeonRun.planDate,
+  };
+  const rewardEligible = Boolean(
+    state.dungeonRun.rewardEligible &&
+      !state.dungeonRun.demoMode &&
+      !hasDungeonRewardForPlan(state, settlementKey)
+  );
+  const fixedReward = rewardEligible
+    ? calculateDungeonReward({
+        route: state.dungeonRun.completionRoute,
+        completedTaskCount: state.dungeonRun.completedTaskCount,
+      })
+    : { growth: 0, resources: 0 };
+  state.stats.growth += fixedReward.growth;
+  state.stats.resources += fixedReward.resources;
+  state.dungeonRun.totals = clone(fixedReward);
+  state.dungeonRun.rewardGranted = rewardEligible;
+  const levelUps = calculateLevelUps(state);
+  applyAgentArcState(state);
+
+  const rewardText = rewardEligible
+    ? `成长值 +${fixedReward.growth} / 资源点 +${fixedReward.resources}`
+    : "本轮为演示或重玩，不发放正式奖励";
+  const settleStory = `${narrative.storyText}\n\n【本轮抉择】\n${routeRecap}\n\n【章节归档】\n${rewardText}`;
 
   createDiaryEntry(state, {
     title: `夜间副本结局：${ending.direction}`,
     body: settleStory,
-    reward: `成长值 +${totals.growth} / 资源点 +${totals.resources}`,
+    reward: rewardText,
   });
 
   createMemoryEntry(state, {
     type: "dungeon_settlement",
     title: `夜间副本完成：${ending.direction}`,
-    memorySummary: `${storyline.lineName} 达成「${ending.direction}」，累计成长值 +${totals.growth}，资源点 +${totals.resources}`,
+    memorySummary: narrative.memorySummary,
     storyText: settleStory,
-    reward: `成长值 +${totals.growth} / 资源点 +${totals.resources}`,
+    reward: rewardText,
   });
 
-  state.stats.streak += 1;
   state.agent.stage = "chapter-continue";
   state.agent.emotion = "稳态前进";
   state.lastStory = settleStory;
-  state.lastRewardSummary = `副本结算：成长值 +${totals.growth}，资源点 +${totals.resources}，连击天数 +1`;
+  state.lastRewardSummary = `副本结算：${rewardText}`;
   if (levelUps > 0) {
     state.lastRewardSummary += `；角色升至 Lv.${state.stats.level}`;
   }
   state.dungeonRun.readyToSettle = false;
   state.dungeonRun.settled = true;
   state.dungeonRun.endingSummary = `${ending.title} · ${ending.direction}`;
+  if (!Array.isArray(state.dungeonSettlementHistory)) {
+    state.dungeonSettlementHistory = [];
+  }
+  if (rewardEligible) {
+    state.dungeonSettlementHistory.unshift({
+      runId: state.dungeonRun.runId,
+      dailyPlanId: state.dungeonRun.dailyPlanId,
+      planDate: state.dungeonRun.planDate,
+      stageGoalId: state.dungeonRun.stageGoalId,
+      completionRoute: state.dungeonRun.completionRoute,
+      demoMode: false,
+      rewardGranted: true,
+      reward: clone(fixedReward),
+      settledAt: new Date().toISOString(),
+    });
+    state.dungeonSettlementHistory = state.dungeonSettlementHistory.slice(0, 60);
+  }
 
   syncAgentArtifacts(state);
   const storyAsset = selectEventStoryAsset(state, {
@@ -2060,12 +3636,12 @@ function settleDungeonRun() {
 
   return {
     tag: "dungeon.settled",
-    title: ending.title,
+    title: narrative.title || ending.title,
     storyText: settleStory,
     rewardSummary: state.lastRewardSummary,
     rewardDelta: {
-      growth: totals.growth,
-      resources: totals.resources,
+      growth: fixedReward.growth,
+      resources: fixedReward.resources,
     },
     characterArc: getCurrentCharacterArc(state),
     storyAsset,
@@ -2145,6 +3721,131 @@ function createPurchase(itemId) {
     storyText: `${item.name} 已加入角色面板，并会在副本入口中体现成长加成。`,
     rewardSummary: `资源点 -${item.price}`,
     storyAsset,
+  };
+}
+
+function consumeStarToolCharge(state, toolId) {
+  const toolState = state.starMap.tools[toolId];
+  toolState.charges = Math.max(0, Number(toolState.charges || 0) - 1);
+  toolState.timesUsed = Number(toolState.timesUsed || 0) + 1;
+  toolState.lastUsedAt = new Date().toISOString();
+  const inventoryItem = (state.inventory || []).find((item) => item && item.id === toolId);
+  if (inventoryItem) {
+    inventoryItem.charges = toolState.charges;
+  }
+}
+
+async function useStarMapTool(payload) {
+  const state = getState();
+  ensureInitialized(state);
+  migrateLegacyState(state);
+  ensureStarMapState(state);
+
+  const toolId = String(payload && payload.toolId || "").trim();
+  const taskId = String(payload && payload.taskId || "").trim();
+  const tool = getStarTool(toolId);
+  const toolState = state.starMap.tools[toolId];
+  if (!tool || !toolState) {
+    throw new Error("该星宿道具尚未获得");
+  }
+  if (Number(toolState.charges || 0) <= 0) {
+    throw new Error("该道具当前没有可用次数");
+  }
+
+  const target = findStarToolTarget(state, taskId);
+  if (!target) {
+    throw new Error("请选择一个可用任务");
+  }
+
+  let title = `${tool.name}已生效`;
+  let storyText = "星宿道具已经作用到任务计划。";
+  let action = "REFRESH";
+  let actionPayload = { taskId };
+
+  if (tool.action === "FOCUS") {
+    if (target.done || String(target.status || "").toUpperCase() === "DONE") {
+      throw new Error("专注披风只能用于未完成任务");
+    }
+    action = "FOCUS";
+    actionPayload = { taskId, focusMinutes: 25 };
+    storyText = `已为「${target.title}」准备 25 分钟专注空间。`;
+  } else if (tool.action === "SPLIT") {
+    if (target.done || String(target.status || "").toUpperCase() === "DONE") {
+      throw new Error("洞察卷轴只能拆解未完成任务");
+    }
+    await replanGoalTasks({ reason: REPLAN_REASONS.TOO_HARD, taskId });
+    storyText = `「${target.title}」已拆成三个更容易开始的步骤。`;
+  } else if (tool.action === "REVIEW") {
+    if (!target.done && String(target.status || "").toUpperCase() !== "DONE") {
+      throw new Error("记忆符印只能用于已完成任务");
+    }
+    const today = new Date();
+    const timeZone = state.profile && state.profile.timeZone || DEFAULT_TIME_ZONE;
+    const existing = state.starMap.scheduledReviews.some(
+      (review) => review && review.sourceTaskId === taskId && !review.cancelledAt
+    );
+    if (existing) {
+      throw new Error("该任务已经安排过间隔复习");
+    }
+    [1, 3, 7].forEach((offsetDays) => {
+      state.starMap.scheduledReviews.push({
+        reviewId: allocateId(state, "star-review"),
+        sourceTaskId: taskId,
+        sourceTitle: target.title,
+        offsetDays,
+        dueDate: getPlanDate(addDays(today, offsetDays), timeZone),
+        materializedTaskId: null,
+        createdAt: new Date().toISOString(),
+      });
+    });
+    storyText = `已为「${target.title}」安排第 1、3、7 天复习。`;
+  } else if (tool.action === "REFLECT") {
+    if (!target.done && String(target.status || "").toUpperCase() !== "DONE") {
+      throw new Error("回溯之镜只能用于已完成任务");
+    }
+    const created = createStarToolTask(state, {
+      title: `回溯复盘：${target.title}`,
+      detail: `回顾「${target.title}」，整理一个错误、疑点或最值得保留的方法。`,
+      estimatedMinutes: 15,
+      toolId,
+      sourceTaskId: taskId,
+    });
+    actionPayload = { taskId: created.id };
+    storyText = `已从「${target.title}」生成一项 15 分钟复盘任务。`;
+  } else if (tool.action === "FALLBACK") {
+    if (target.done || String(target.status || "").toUpperCase() === "DONE") {
+      throw new Error("守护契约只能用于未完成任务");
+    }
+    const duplicate = (state.tasks || []).find(
+      (task) => task && !task.done && task.starToolId === toolId && task.starSourceTaskId === taskId
+    );
+    if (duplicate) {
+      throw new Error("该任务已有保底版本");
+    }
+    const created = createStarToolTask(state, {
+      title: `保底行动：${target.title}`,
+      detail: `只做 5 分钟：打开材料、完成第一步，并写下下一次从哪里继续。原任务不会因此被冒充完成。`,
+      estimatedMinutes: 5,
+      rewardGrowth: 3,
+      rewardResource: 3,
+      toolId,
+      sourceTaskId: taskId,
+    });
+    actionPayload = { taskId: created.id };
+    storyText = `已为「${target.title}」生成 5 分钟保底版本，原任务保持不变。`;
+  }
+
+  consumeStarToolCharge(state, toolId);
+  state.lastStory = storyText;
+  state.lastRewardSummary = `${tool.name}剩余 ${state.starMap.tools[toolId].charges} 次`;
+  saveStore();
+  return {
+    tag: "star-map.tool.used",
+    title,
+    storyText,
+    rewardSummary: state.lastRewardSummary,
+    action,
+    actionPayload,
   };
 }
 
@@ -2230,9 +3931,6 @@ async function advanceGoal(payload) {
     { id: "deadline", question: "距离关键节点或截止日期还有多久？", answer: state.profile.deadline },
     { id: "dailyTime", question: "每天大约能稳定投入几小时？", answer: state.profile.dailyTime },
   ]);
-  if (!Array.isArray(state.tasks) || state.tasks.length === 0) {
-    state.tasks = mapTasks(state, blueprint.tasks);
-  }
   state.transition.needsNewGoalPrompt = false;
   state.agent.chapter = blueprint.chapterTitle || `${role.chapter} · 新篇章`;
   state.agent.mainline = blueprint.mainlineSummary || buildMainline(goal, role);
@@ -2336,11 +4034,13 @@ module.exports = {
   loginSession,
   completeTask,
   createTask,
+  createParallelGoal,
   updateTask,
   replanGoalTasks,
   refreshNextSuggestion,
   adoptNextSuggestion,
   createPurchase,
+  useStarMapTool,
   advanceGoal,
   getCurrentDungeonStatus,
   startDungeonRun,

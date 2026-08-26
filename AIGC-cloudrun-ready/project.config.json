@@ -1,5 +1,5 @@
 {
-  "description": "任务织梦师原生微信小程序",
+  "description": "织梦学旅原生微信小程序",
   "miniprogramRoot": "miniprogram/",
   "compileType": "miniprogram",
   "setting": {
@@ -32,7 +32,7 @@
   },
   "libVersion": "trial",
   "appid": "wx9f0198d99c3448a6",
-  "projectname": "aigc-task-weaver",
+  "projectname": "zhimeng-xuelv",
   "condition": {},
   "simulatorPluginLibVersion": {},
   "packOptions": {

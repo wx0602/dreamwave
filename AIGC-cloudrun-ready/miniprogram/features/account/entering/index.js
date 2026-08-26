@@ -19,6 +19,18 @@ Page({
     }, 360);
   },
   stopProgress() { if (this.progressTimer) clearInterval(this.progressTimer); this.progressTimer = null; },
+  finishInitialization(state) {
+    storage.set(storage.KEYS.loginAccount, this.payload.account);
+    storage.set(storage.KEYS.userName, this.payload.name);
+    storage.set(storage.KEYS.selectedRole, this.payload.roleId);
+    storage.set(storage.KEYS.userId, (state.user && state.user.userId) || "");
+    storage.set(storage.KEYS.agentId, (state.agent && state.agent.agentId) || "");
+    getApp().globalData.state = state;
+    getApp().globalData.registrationPayload = null;
+    this.stopProgress();
+    this.setData({ progress: 100, stage: "世界入口已开启", working: false });
+    setTimeout(() => wx.redirectTo({ url: "/features/account/init-result/index" }), 420);
+  },
   async start() {
     if (this.data.working || !this.payload) return;
     this.setData({ progress: 8, stage: STAGES[0], error: "", working: true });
@@ -26,18 +38,20 @@ Page({
     try {
       const result = await api.createSession(this.payload);
       if (!result || !result.state) throw new Error("初始化返回为空");
-      const state = result.state;
-      storage.set(storage.KEYS.loginAccount, this.payload.account);
-      storage.set(storage.KEYS.userName, this.payload.name);
-      storage.set(storage.KEYS.selectedRole, this.payload.roleId);
-      storage.set(storage.KEYS.userId, (state.user && state.user.userId) || "");
-      storage.set(storage.KEYS.agentId, (state.agent && state.agent.agentId) || "");
-      getApp().globalData.state = state;
-      getApp().globalData.registrationPayload = null;
-      this.stopProgress();
-      this.setData({ progress: 100, stage: "世界入口已开启", working: false });
-      setTimeout(() => wx.redirectTo({ url: "/features/account/init-result/index" }), 420);
+      this.finishInitialization(result.state);
     } catch (error) {
+      // The response may be interrupted after the server has committed the
+      // account. Recover transparently instead of forcing a manual login.
+      try {
+        const recovered = await api.loginSession({
+          account: this.payload.account,
+          password: this.payload.password,
+        });
+        if (recovered && recovered.state) {
+          this.finishInitialization(recovered.state);
+          return;
+        }
+      } catch (loginError) {}
       this.stopProgress();
       this.setData({ error: error.message || "世界生成失败", stage: "入口暂未开启", working: false });
     }

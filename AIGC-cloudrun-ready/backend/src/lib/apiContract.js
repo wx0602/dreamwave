@@ -170,9 +170,28 @@ function buildTaskDto(task) {
     rewardGrowth: toNumber(source.rewardGrowth ?? source.reward_growth, 0),
     rewardResource: toNumber(source.rewardResource ?? source.reward_resource, 0),
     stageGoalId: cleanText(source.stageGoalId),
+    stageTaskId: cleanText(source.stageTaskId),
+    dailyPlanId: cleanText(source.dailyPlanId),
+    scheduledDate: cleanText(source.scheduledDate),
+    source: cleanText(source.source),
+    carryoverCount: toNumber(source.carryoverCount, 0),
+    completedAt: cleanText(source.completedAt),
     difficulty: toNumber(source.difficulty, 0),
     dueDate: cleanText(source.dueDate) || cleanText(source.deadlineAt),
     narrativeHook: cleanText(source.narrativeHook),
+    portfolioGoalId: cleanText(source.portfolioGoalId),
+    portfolioNodeId: cleanText(source.portfolioNodeId),
+    portfolioDay: toNumber(source.portfolioDay, 0),
+    portfolioSlot: toNumber(source.portfolioSlot, 0),
+    portfolioReleaseDate: cleanText(source.portfolioReleaseDate),
+    goalTitle: cleanText(source.goalTitle),
+    taskRole: cleanText(source.taskRole),
+    taskRoleLabel: cleanText(source.taskRoleLabel),
+    phaseId: cleanText(source.phaseId),
+    phaseTitle: cleanText(source.phaseTitle),
+    weeklyMilestoneId: cleanText(source.weeklyMilestoneId),
+    weeklyMilestoneTitle: cleanText(source.weeklyMilestoneTitle),
+    qualityScore: toNumber(source.qualityScore, 0),
   };
 }
 
@@ -190,6 +209,8 @@ function buildGoalTaskDto(task) {
     rewardResource: toNumber(source.rewardResource, 0),
     dueDate: cleanText(source.dueDate) || cleanText(source.deadlineAt),
     narrativeHook: cleanText(source.narrativeHook),
+    order: toNumber(source.order, 0),
+    completedAt: cleanText(source.completedAt),
   };
 }
 
@@ -224,12 +245,130 @@ function buildGoalPlanDto(goalPlan) {
     longTermGoal: cleanText(source.longTermGoal),
     goalLevel: cleanText(source.goalLevel),
     currentStageId: cleanText(source.currentStageId),
+    status: cleanText(source.status) || "ACTIVE",
     stageGoals: Array.isArray(source.stageGoals) ? source.stageGoals.map(buildStageGoalDto) : [],
     clarifyingQuestions: Array.isArray(source.clarifyingQuestions)
       ? source.clarifyingQuestions.map(buildClarifyingQuestionDto)
       : [],
     createdAt: cleanText(source.createdAt),
     updatedAt: cleanText(source.updatedAt),
+  };
+}
+
+function buildGoalPortfolioDto(portfolio) {
+  const source = asObject(portfolio) || {};
+  return {
+    goals: Array.isArray(source.goals)
+      ? source.goals.map((goal) => ({
+          goalId: cleanText(goal && goal.goalId),
+          title: cleanText(goal && goal.title),
+          description: cleanText(goal && goal.description),
+          durationDays: toNumber(goal && goal.durationDays, 0),
+          completedDays: toNumber(goal && goal.completedDays, 0),
+          starsPerDay: toNumber(goal && goal.starsPerDay, 3),
+          completedStars: toNumber(goal && goal.completedStars, 0),
+          totalStarCount: toNumber(goal && goal.totalStarCount, 0),
+          planningVersion: toNumber(goal && goal.planningVersion, 0),
+          dailyBudgetMinutes: toNumber(goal && goal.dailyBudgetMinutes, 0),
+          planningQuality: goal && goal.planningQuality ? {
+            score: toNumber(goal.planningQuality.score, 0),
+            status: cleanText(goal.planningQuality.status),
+            horizonStartDay: toNumber(goal.planningQuality.horizonStartDay, 0),
+            horizonEndDay: toNumber(goal.planningQuality.horizonEndDay, 0),
+          } : null,
+          phases: goal && goal.planningBlueprint && Array.isArray(goal.planningBlueprint.phases)
+            ? goal.planningBlueprint.phases.map((phase) => ({
+                phaseId: cleanText(phase && phase.phaseId),
+                order: toNumber(phase && phase.order, 0),
+                title: cleanText(phase && phase.title),
+                description: cleanText(phase && phase.description),
+                startDay: toNumber(phase && phase.startDay, 0),
+                endDay: toNumber(phase && phase.endDay, 0),
+              }))
+            : [],
+          weeklyMilestones: goal && goal.planningBlueprint && Array.isArray(goal.planningBlueprint.weeklyMilestones)
+            ? goal.planningBlueprint.weeklyMilestones.map((milestone) => ({
+                milestoneId: cleanText(milestone && milestone.milestoneId),
+                week: toNumber(milestone && milestone.week, 0),
+                startDay: toNumber(milestone && milestone.startDay, 0),
+                endDay: toNumber(milestone && milestone.endDay, 0),
+                phaseId: cleanText(milestone && milestone.phaseId),
+                title: cleanText(milestone && milestone.title),
+                focus: cleanText(milestone && milestone.focus),
+                outcome: cleanText(milestone && milestone.outcome),
+              }))
+            : [],
+          status: cleanText(goal && goal.status) || "ACTIVE",
+          constellationId: cleanText(goal && goal.constellationId),
+          constellationName: cleanText(goal && goal.constellationName),
+          constellations: Array.isArray(goal && goal.constellations)
+            ? goal.constellations.map((map) => ({
+                mapId: cleanText(map && map.mapId),
+                order: toNumber(map && map.order, 0),
+                constellationId: cleanText(map && map.constellationId),
+                constellationName: cleanText(map && map.constellationName),
+                nodeIds: Array.isArray(map && map.nodeIds) ? [...map.nodeIds] : [],
+                starCount: toNumber(map && map.starCount, 0),
+                completedStars: toNumber(map && map.completedStars, 0),
+                status: cleanText(map && map.status) || "LOCKED",
+                completedAt: cleanText(map && map.completedAt),
+              }))
+            : [],
+          startDate: cleanText(goal && goal.startDate),
+          lastReleasedDate: cleanText(goal && goal.lastReleasedDate),
+          createdAt: cleanText(goal && goal.createdAt),
+          completedAt: cleanText(goal && goal.completedAt),
+          nodes: Array.isArray(goal && goal.nodes)
+            ? goal.nodes.map((node) => ({
+                nodeId: cleanText(node && node.nodeId),
+                day: toNumber(node && node.day, 0),
+                slot: toNumber(node && node.slot, 0),
+                title: cleanText(node && node.title),
+                detail: cleanText(node && node.detail),
+                estimatedMinutes: toNumber(node && node.estimatedMinutes, 25),
+                status: cleanText(node && node.status) || "LOCKED",
+                releasedDate: cleanText(node && node.releasedDate),
+                completedAt: cleanText(node && node.completedAt),
+                planningStatus: cleanText(node && node.planningStatus),
+                qualityScore: toNumber(node && node.qualityScore, 0),
+                taskRole: cleanText(node && node.taskRole),
+                taskRoleLabel: cleanText(node && node.taskRoleLabel),
+                phaseId: cleanText(node && node.phaseId),
+                phaseTitle: cleanText(node && node.phaseTitle),
+                weeklyMilestoneId: cleanText(node && node.weeklyMilestoneId),
+                weeklyMilestoneTitle: cleanText(node && node.weeklyMilestoneTitle),
+              }))
+            : [],
+        }))
+      : [],
+  };
+}
+
+function buildDailyPlanDto(dailyPlan) {
+  const source = asObject(dailyPlan);
+  if (!source) {
+    return null;
+  }
+  const metrics = asObject(source.metrics) || {};
+  return {
+    id: cleanText(source.id),
+    planDate: cleanText(source.planDate),
+    goalPlanId: cleanText(source.goalPlanId),
+    stageGoalId: cleanText(source.stageGoalId),
+    status: cleanText(source.status) || "ACTIVE",
+    capacityMinutes: toNumber(source.capacityMinutes, 0),
+    taskIds: Array.isArray(source.taskIds) ? [...source.taskIds] : [],
+    source: cleanText(source.source),
+    version: toNumber(source.version, 1),
+    message: cleanText(source.message),
+    generatedAt: cleanText(source.generatedAt),
+    completedAt: cleanText(source.completedAt),
+    metrics: {
+      plannedCount: toNumber(metrics.plannedCount, 0),
+      completedCount: toNumber(metrics.completedCount, 0),
+      plannedMinutes: toNumber(metrics.plannedMinutes, 0),
+      completedMinutes: toNumber(metrics.completedMinutes, 0),
+    },
   };
 }
 
@@ -252,6 +391,46 @@ function buildInventoryItemDto(item) {
     detail: cleanText(source.detail),
     equipped: Boolean(source.equipped),
     category: cleanText(source.category),
+    charges: toNumber(source.charges, 0),
+  };
+}
+
+function buildStarMapDto(starMap) {
+  const source = asObject(starMap) || {};
+  const tools = asObject(source.tools) || {};
+  return {
+    collections: Array.isArray(source.collections)
+      ? source.collections.map((entry) => ({
+          constellationId: cleanText(entry && entry.constellationId),
+          seriesMapId: cleanText(entry && entry.seriesMapId),
+          goalPlanId: cleanText(entry && entry.goalPlanId),
+          longTermGoal: cleanText(entry && entry.longTermGoal),
+          stageGoalId: cleanText(entry && entry.stageGoalId),
+          title: cleanText(entry && entry.title),
+          description: cleanText(entry && entry.description),
+          completedAt: cleanText(entry && entry.completedAt),
+          starCount: toNumber(entry && entry.starCount, 0),
+          stars: Array.isArray(entry && entry.stars)
+            ? entry.stars.map((star) => ({
+                taskId: cleanText(star && star.taskId),
+                title: cleanText(star && star.title),
+                completedAt: cleanText(star && star.completedAt),
+              }))
+            : [],
+          rewardToolId: cleanText(entry && entry.rewardToolId),
+          rewardToolName: cleanText(entry && entry.rewardToolName),
+        }))
+      : [],
+    tools: Object.keys(tools).map((toolId) => ({
+      toolId,
+      name: cleanText(tools[toolId] && tools[toolId].name),
+      icon: cleanText(tools[toolId] && tools[toolId].icon),
+      detail: cleanText(tools[toolId] && tools[toolId].detail),
+      action: cleanText(tools[toolId] && tools[toolId].action),
+      charges: toNumber(tools[toolId] && tools[toolId].charges, 0),
+      timesUsed: toNumber(tools[toolId] && tools[toolId].timesUsed, 0),
+      obtainedAt: cleanText(tools[toolId] && tools[toolId].obtainedAt),
+    })),
   };
 }
 
@@ -518,6 +697,8 @@ function buildEventDto(event) {
     worldEntities: Array.isArray(source.worldEntities)
       ? source.worldEntities.map(buildWorldEntityDto)
       : [],
+    action: cleanText(source.action),
+    actionPayload: asObject(source.actionPayload),
   };
 }
 
@@ -529,12 +710,19 @@ function buildAppState(statePayload) {
     progress: buildProgressDto(source),
     agent: buildAgentDto(source),
     tasks: Array.isArray(source.tasks) ? source.tasks.map(buildTaskDto) : [],
+    taskHistory: Array.isArray(source.taskHistory) ? source.taskHistory.map(buildTaskDto) : [],
     goalPlan: buildGoalPlanDto(source.goalPlan),
+    goalPortfolio: buildGoalPortfolioDto(source.goalPortfolio),
+    dailyPlan: buildDailyPlanDto(source.dailyPlan),
+    dailyPlanHistory: Array.isArray(source.dailyPlanHistory)
+      ? source.dailyPlanHistory.map(buildDailyPlanDto)
+      : [],
     nextSuggestion: cleanText(source.nextSuggestion),
     diary: Array.isArray(source.diary) ? source.diary.map(buildDiaryEntryDto) : [],
     inventory: Array.isArray(source.inventory)
       ? source.inventory.map(buildInventoryItemDto)
       : [],
+    starMap: buildStarMapDto(source.starMap),
     shopItems: Array.isArray(source.shop) ? source.shop.map(buildShopItemDto) : [],
     transition: buildTransitionDto(source.transition),
     characterArc: buildCharacterArcDto(source.characterArc),
@@ -603,6 +791,28 @@ function buildDungeonStatus(dungeonState, panel) {
             : null,
           endingTitle: cleanText(run.endingTitle),
           endingSummary: cleanText(run.endingSummary),
+          planDate: cleanText(run.planDate),
+          dailyPlanId: cleanText(run.dailyPlanId),
+          stageGoalId: cleanText(run.stageGoalId),
+          stageTitle: cleanText(run.stageTitle),
+          nextStageTitle: cleanText(run.nextStageTitle),
+          stageTheme: asObject(run.stageTheme)
+            ? {
+                id: cleanText(run.stageTheme.id),
+                name: cleanText(run.stageTheme.name),
+                eventLead: cleanText(run.stageTheme.eventLead),
+              }
+            : null,
+          completionRoute: cleanText(run.completionRoute),
+          routeLabel: cleanText(run.routeLabel),
+          plannedTaskCount: toNumber(run.plannedTaskCount, 0),
+          completedTaskCount: toNumber(run.completedTaskCount, 0),
+          rewardEligible: Boolean(run.rewardEligible),
+          rewardGranted: Boolean(run.rewardGranted),
+          rewardPreview: {
+            growth: toNumber(run.rewardPreview && run.rewardPreview.growth, 0),
+            resources: toNumber(run.rewardPreview && run.rewardPreview.resources, 0),
+          },
         }
       : null,
   };

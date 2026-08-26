@@ -13,7 +13,7 @@ function createEmptyState() {
   return {
     meta: {
       nextId: 1,
-      version: 4,
+      version: 8,
       updatedAt: new Date().toISOString(),
     },
     initialized: false,
@@ -31,7 +31,14 @@ function createEmptyState() {
     lastStory: null,
     lastRewardSummary: null,
     tasks: [],
+    taskHistory: [],
     goalPlan: null,
+    dailyPlan: null,
+    dailyPlanHistory: [],
+    goalPortfolio: {
+      version: 1,
+      goals: [],
+    },
     nextSuggestion: null,
     diary: [],
     memories: [],
@@ -85,11 +92,37 @@ function createEmptyState() {
         growth: 0,
         resources: 0,
       },
+      planDate: null,
+      dailyPlanId: null,
+      stageGoalId: null,
+      stageTitle: null,
+      nextStageTitle: null,
+      stageTheme: null,
+      completionRoute: null,
+      routeLabel: null,
+      plannedTaskCount: 0,
+      completedTaskCount: 0,
+      completedTaskIds: [],
+      completedTaskTitles: [],
+      demoMode: false,
+      rewardEligible: false,
+      rewardGranted: false,
+      rewardPreview: {
+        growth: 0,
+        resources: 0,
+      },
       readyToSettle: false,
       settled: false,
       endingSummary: null,
       preparedEnding: null,
       recentOutcome: null,
+    },
+    dungeonSettlementHistory: [],
+    starMap: {
+      version: 1,
+      collections: [],
+      tools: {},
+      scheduledReviews: [],
     },
     inventory: [],
     shop: defaultShop.map((item) => ({ ...item })),
@@ -143,10 +176,22 @@ function loadStore() {
   if (!Array.isArray(state.memories)) {
     state.memories = [];
   }
+  if (!Array.isArray(state.taskHistory)) {
+    state.taskHistory = [];
+  }
+  if (!Array.isArray(state.dailyPlanHistory)) {
+    state.dailyPlanHistory = [];
+  }
+  if (!Array.isArray(state.dungeonSettlementHistory)) {
+    state.dungeonSettlementHistory = [];
+  }
+  if (!Object.prototype.hasOwnProperty.call(state, "dailyPlan")) {
+    state.dailyPlan = null;
+  }
   if (!state.meta) {
     state.meta = {
       nextId: 1,
-      version: 4,
+      version: 6,
       updatedAt: new Date().toISOString(),
     };
   }
@@ -202,6 +247,25 @@ function loadStore() {
         resolve: 0,
       },
       totals: {
+        growth: 0,
+        resources: 0,
+      },
+      planDate: null,
+      dailyPlanId: null,
+      stageGoalId: null,
+      stageTitle: null,
+      nextStageTitle: null,
+      stageTheme: null,
+      completionRoute: null,
+      routeLabel: null,
+      plannedTaskCount: 0,
+      completedTaskCount: 0,
+      completedTaskIds: [],
+      completedTaskTitles: [],
+      demoMode: false,
+      rewardEligible: false,
+      rewardGranted: false,
+      rewardPreview: {
         growth: 0,
         resources: 0,
       },

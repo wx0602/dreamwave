@@ -1,5 +1,4 @@
 const { jsonCompletion } = require("./deepseekService");
-const { generateTasks } = require("./taskPlannerService");
 const { buildStoryAssetPrompt } = require("../constants/storyAssets");
 
 function formatTitles(titles = []) {
@@ -24,34 +23,12 @@ function formatSeasonDigests(seasonDigests = []) {
     : "无";
 }
 
-function normalizeTask(task, index) {
-  const rewardGrowth = Number(task.rewardGrowth || 12 + index * 2);
-  const rewardResource = Number(task.rewardResource || 14 + index * 2);
-  return {
-    title: String(task.title || `阶段任务 ${index + 1}`).trim(),
-    estimate: String(task.estimate || "25 分钟").trim(),
-    rewardGrowth,
-    rewardResource,
-    rationale: String(task.rationale || "").trim(),
-  };
-}
-
 function buildFallbackBlueprint({ role, profile, chapterTitle, storyAsset }) {
-  const tasks = generateTasks(profile.goal).map((task, index) => ({
-    ...task,
-    rationale:
-      index === 0
-        ? "先从最小可执行块开始，降低行动门槛。"
-        : index === 1
-          ? "用一段完整练习巩固当前阶段重点。"
-          : "通过复盘把输入转成可持续的记忆。",
-  }));
-
   return {
     chapterTitle: chapterTitle || role.chapter,
-    mainlineSummary: `围绕“${profile.goal}”展开主线。你需要在 ${chapterTitle || role.chapter} 中依次完成 3 个可执行学习任务。`,
+    mainlineSummary: `围绕“${profile.goal}”展开主线。你将在 ${chapterTitle || role.chapter} 中按阶段依次完成长期路线上的行动任务。`,
     openingStory: `${role.agentName} 已接管本阶段档案。${storyAsset && storyAsset.name ? `「${storyAsset.name}」成为本章的初始意象。` : ""}你的目标“${profile.goal}”会被拆解成更小、更科学的行动单元，并逐步转写成一段魔幻冒险。`,
-    tasks,
+    tasks: [],
     source: "fallback",
   };
 }
@@ -76,30 +53,20 @@ async function generateGoalBlueprint({
   });
   const storyAssetPrompt = buildStoryAssetPrompt(storyAsset);
 
-  const prompt = `请将一个阶段性学习目标拆解为科学合理、可执行的小任务，并包装成带魔幻冒险感的轻量主线剧情。
+  const prompt = `请为一个长期学习目标生成带魔幻冒险感的轻量主线开场。目标拆解和每日任务由独立规划器负责，你只负责章节标题与叙事，不要生成或评价学习任务。
 
 必须返回 JSON，格式如下：
 {
   "chapterTitle": "字符串",
   "mainlineSummary": "字符串，80字以内",
-  "openingStory": "字符串，80-140字",
-  "tasks": [
-    {
-      "title": "字符串",
-      "estimate": "如 25 分钟",
-      "rewardGrowth": 16,
-      "rewardResource": 18,
-      "rationale": "为什么这个任务科学合理"
-    }
-  ]
+  "openingStory": "字符串，80-140字"
 }
 
 约束：
-1. tasks 必须正好 3 条。
-2. 任务要和用户目标直接相关，粒度清晰、可执行、尽量科学合理。
-3. 故事风格必须贴合角色设定，带一点魔幻、冒险、成长感。
-4. openingStory 需要自然承接本次视觉素材，不要写成图片说明。
-5. 不要输出解释文字，只输出 JSON。`;
+1. 故事风格必须贴合角色设定，带一点魔幻、冒险、成长感。
+2. openingStory 需要自然承接本次视觉素材，不要写成图片说明。
+3. 不要输出 tasks，不要判断正确率或掌握度。
+4. 不要输出解释文字，只输出 JSON。`;
 
   try {
     const result = await jsonCompletion(
@@ -140,7 +107,7 @@ ${formatSeasonDigests(seasonDigests)}
       }
     );
 
-    if (!result || !Array.isArray(result.tasks) || result.tasks.length === 0) {
+    if (!result || typeof result !== "object") {
       return fallback;
     }
 
@@ -148,7 +115,7 @@ ${formatSeasonDigests(seasonDigests)}
       chapterTitle: String(result.chapterTitle || currentChapter || role.chapter).trim(),
       mainlineSummary: String(result.mainlineSummary || fallback.mainlineSummary).trim(),
       openingStory: String(result.openingStory || fallback.openingStory).trim(),
-      tasks: result.tasks.slice(0, 3).map(normalizeTask),
+      tasks: [],
       source: "deepseek",
     };
   } catch (error) {

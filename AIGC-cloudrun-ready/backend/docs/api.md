@@ -28,8 +28,12 @@
 | `GET` | `/sessions/current` | 无 | `AppStateDto` | 获取当前全量状态 |
 | `POST` | `/tasks` | `title` | `CommandResultDto` | 创建支线任务 |
 | `POST` | `/tasks/{taskId}/completion` | 无 | `CommandResultDto` | 完成任务并结算剧情 |
-| `POST` | `/goals/advance` | `goal` | `CommandResultDto` | 推进到下一阶段目标 |
+| `POST` | `/goals` | `title` `durationDays` | `CommandResultDto` | 新建一个可并行的长期目标星图 |
+| `POST` | `/goals/advance` | `goal` | `CommandResultDto` | 当前长期目标完成后创建新目标 |
 | `GET` | `/dungeons/current/status` | `demo=1` 可选 | `DungeonStatusDto` | 查询副本开启状态 |
+| `POST` | `/dungeons/current/start` | `demo` 可选 | `CommandResultDto` | 按当天学习快照进入副本 |
+| `POST` | `/dungeons/current/events` | `choiceId` | `CommandResultDto` | 推进剧情分支，不即时发正式奖励 |
+| `POST` | `/dungeons/current/settlement` | 无 | `CommandResultDto` | AI 生成结局并由后端执行每日一次结算 |
 | `GET` | `/agents/current` | 无 | `AgentProfileDto` | 获取当前 Agent 档案 |
 | `GET` | `/agents/current/memories` | 无 | `AgentMemoryDto` | 获取 Agent 记忆与树状快照 |
 | `POST` | `/purchases` | `itemId` | `CommandResultDto` | 购买道具 |
@@ -41,10 +45,22 @@
 - `user`: 用户与角色选择信息
 - `progress`: 等级、成长值、资源点、连击天数
 - `agent`: 当前 Agent 章节、情绪、技能等
-- `tasks`: 前端主列表任务
+- `tasks`: 当天执行任务；不会混入后续阶段任务
+- `taskHistory`: 已归档的历史执行任务
+- `goalPlan`: 长期目标、顺序阶段和稳定的阶段任务池
+- `dailyPlan`: 当天计划、容量、任务引用和完成统计
+- `dailyPlanHistory`: 最近 30 份每日计划摘要
 - `diary`: 日记流
-- `transition`: 是否需要录入下一阶段目标
+- `transition`: 仅在长期目标全部阶段完成后提示录入新目标
 - `characterArc` `skillState` `dungeonProfile` `memoryTree` `worldState`: 扩展状态面板
+
+### `DungeonStatusDto.run`
+
+- `stageTitle` `nextStageTitle` `stageTheme`: 本轮冻结的学习阶段和主题
+- `completionRoute` `routeLabel`: 整备、部分推进、今日全清或阶段突破路线
+- `plannedTaskCount` `completedTaskCount`: 启动时的今日主线快照
+- `rewardEligible` `rewardPreview`: 本轮是否可领取正式奖励及后端预计算值
+- 演示模式和同一每日计划的重玩均返回不可领取；副本结算不会增加连击天数
 
 ### `CommandResultDto`
 

@@ -22,11 +22,13 @@ const {
   loginSession,
   completeTask,
   createTask,
+  createParallelGoal,
   updateTask,
   replanGoalTasks,
   refreshNextSuggestion,
   adoptNextSuggestion,
   createPurchase,
+  useStarMapTool,
   advanceGoal,
   getCurrentDungeonStatus,
   startDungeonRun,
@@ -115,6 +117,13 @@ function createServer() {
         return;
       }
 
+      if (req.method === "POST" && pathname === API_ROUTES.goals) {
+        const body = await parseBody(req);
+        const event = await createParallelGoal(body);
+        respondSuccess(res, buildCommandResult(event, await getCurrentSessionState()), "长期目标创建成功");
+        return;
+      }
+
       const editMatch = req.method === "POST" && matchTaskEditPath(pathname);
       if (editMatch) {
         const body = await parseBody(req);
@@ -179,8 +188,15 @@ function createServer() {
       }
 
       if (req.method === "POST" && pathname === API_ROUTES.currentDungeonSettlement) {
-        const event = settleDungeonRun();
+        const event = await settleDungeonRun();
         respondSuccess(res, buildCommandResult(event, await getCurrentSessionState()), "副本结算成功");
+        return;
+      }
+
+      if (req.method === "POST" && pathname === API_ROUTES.starMapToolUses) {
+        const body = await parseBody(req);
+        const event = await useStarMapTool(body);
+        respondSuccess(res, buildCommandResult(event, await getCurrentSessionState()), "星宿道具已使用");
         return;
       }
 

@@ -6,6 +6,7 @@ const KEYS = Object.freeze({
   agentId: "alliance.agentId",
   dungeonDemo: "alliance.dungeonDemo",
   companion: "alliance.companion",
+  companionPosition: "alliance.companionPosition",
   companionEvent: "alliance.companionEvent",
   lastOverduePopup: "alliance.lastOverduePopup",
 });

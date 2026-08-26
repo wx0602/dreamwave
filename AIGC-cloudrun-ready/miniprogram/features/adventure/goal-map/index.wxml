@@ -1,6 +1,109 @@
-<view class="map-page watercolor-page"><view class="page-pad"><view class="map-header"><view class="tag">GOAL MAP</view><view class="page-title">目标工作台</view><view class="long-goal">{{plan.longTermGoal}}</view></view>
- <view class="stage-card card {{item.current?'current':''}}" wx:for="{{stages}}" wx:key="id"><view class="stage-top"><view><view class="stage-name">{{item.title}}</view><view class="stage-status">{{item.statusLabel}}</view></view><view class="stage-progress">{{item.progress}}%</view></view><view class="progress-track stage-track"><view class="progress-fill" style="width:{{item.progress}}%"></view></view><view class="stage-desc">{{item.description}}</view><view class="map-task {{task.done?'done':''}}" wx:for="{{item.tasks}}" wx:for-item="task" wx:key="id"><text>{{task.done?'✓':'·'}}</text><view><view>{{task.title}}</view><view class="task-minutes">{{task.estimatedMinutes}} 分钟</view></view></view></view>
- <view class="actions-card card"><view class="section-heading">调整计划</view><view class="action-grid"><button bindtap="openGoalEdit">编辑长期目标</button><button data-reason="TOO_HARD" bindtap="replanTap">细化当前阶段</button><button data-reason="INTERRUPTED" bindtap="replanTap">重新生成今日任务</button><button data-reason="NO_TIME" bindtap="replanTap">调整学习强度</button></view></view>
+<view class="workbench-page watercolor-page">
+  <view class="page-pad">
+    <view class="workbench-header">
+      <view>
+        <view class="tag">GOAL WORKBENCH</view>
+        <view class="page-title">目标工作台</view>
+      </view>
+      <button class="add-goal-button" bindtap="openGoal">＋</button>
+    </view>
+
+    <scroll-view class="goal-switcher" scroll-x enhanced show-scrollbar="{{false}}" wx:if="{{goals.length}}">
+      <view class="goal-list">
+        <view class="goal-card {{item.goalId===selectedGoalId?'selected':''}}" wx:for="{{goals}}" wx:key="goalId" data-id="{{item.goalId}}" bindtap="selectGoal">
+          <view class="goal-card-top"><text>{{item.constellationName}}</text><text>{{item.statusLabel}}</text></view>
+          <view class="goal-card-title">{{item.title}}</view>
+          <view class="goal-card-meta">{{item.completedStars}}/{{item.totalStarCount}} 星 · {{item.mapDone}}/{{item.mapTotal}} 图</view>
+          <view class="mini-track"><view style="width:{{item.progress}}%"></view></view>
+        </view>
+      </view>
+    </scroll-view>
+
+    <view class="empty-state card" wx:if="{{!activeGoal}}">
+      <view class="empty-star">✦</view>
+      <view class="empty-title">还没有长期目标</view>
+      <view class="empty-copy">创建目标后，这里会每天整理出 3 个主线和 2 个支线。</view>
+      <button class="primary-button small-button" bindtap="openGoal">创建长期目标</button>
+    </view>
+
+    <block wx:else>
+      <view class="overview-card card">
+        <view class="overview-head">
+          <view><view class="eyebrow">当前系列</view><view class="overview-title">{{activeGoal.title}}</view></view>
+          <button class="map-link" bindtap="openStarMap">查看星图 ›</button>
+        </view>
+        <view class="metric-row">
+          <view class="metric"><text>{{todayDone}}/5</text><view>今日任务</view></view>
+          <view class="metric"><text>{{activeGoal.completedStars}}/{{activeGoal.totalStarCount}}</text><view>系列星数</view></view>
+          <view class="metric"><text>{{activeGoal.mapDone}}/{{mapCount}}</text><view>收集星图</view></view>
+        </view>
+        <view class="current-map">
+          <view class="map-mark">✦</view>
+          <view class="map-copy"><view>第 {{currentMapOrder}} 图 · {{currentMapName}}</view><text>当前星图已点亮 {{currentMapProgress}}%</text></view>
+          <view class="map-percent">{{currentMapProgress}}%</view>
+        </view>
+      </view>
+
+      <view class="planning-card card">
+        <view class="planning-head"><view class="section-title">近期计划</view><view class="quality-score {{planningScore>=85?'passed':''}}">{{planningScore}}<text>分</text></view></view>
+        <view class="quality-status">{{horizonLabel}} · {{planningStatusLabel}}</view>
+        <view class="plan-level" wx:if="{{currentPhase}}"><text>阶段</text><view>{{currentPhase.title}}</view><view class="level-days">D{{currentPhase.startDay}}—D{{currentPhase.endDay}}</view></view>
+        <view class="plan-level milestone" wx:if="{{currentMilestone}}"><text>本周</text><view>{{currentMilestone.focus}}</view></view>
+      </view>
+
+      <view class="section-bar"><view class="section-title">今天</view><text>{{todayDone}}/5</text></view>
+      <view class="today-empty card" wx:if="{{!todayTasks.length}}">今天的任务尚未释放，刷新或等待新一天开始。</view>
+      <view class="task-card card {{item.done?'done':''}} {{item.typeClass}}" wx:for="{{todayTasks}}" wx:key="taskId">
+        <view class="task-symbol">{{item.done?'✓':item.taskType==='side'?'◇':'✦'}}</view>
+        <view class="task-body" data-index="{{index}}" bindtap="startTask">
+          <view class="task-top"><text class="task-time">{{item.estimatedMinutes}} 分钟</text><text class="task-type">{{item.typeLabel}}</text></view>
+          <view class="task-title">{{item.title}}</view>
+          <view class="task-detail">{{item.detail}}</view>
+        </view>
+        <button class="task-more" wx:if="{{!item.done}}" data-index="{{index}}" catchtap="openTaskActions">···</button>
+      </view>
+
+      <view class="section-bar rhythm-heading"><view class="section-title">七日</view></view>
+      <view class="rhythm-card card">
+        <view class="rhythm-day {{item.current?'current':''}} {{item.complete?'complete':''}} {{item.future?'future':''}}" wx:for="{{rhythmDays}}" wx:key="goalDay">
+          <view class="weekday">{{item.current?'今':item.weekday}}</view>
+          <view class="rhythm-date">{{item.dayText}}</view>
+          <view class="day-dots"><text class="{{dot.done?'lit':''}}" wx:for="{{item.dots}}" wx:for-item="dot" wx:key="id">✦</text></view>
+          <view class="day-index">D{{item.goalDay}}</view>
+        </view>
+      </view>
+
+      <view class="adjust-card card">
+        <view class="adjust-copy"><view class="section-title">调整今天</view></view>
+        <button bindtap="previewLighten">预览轻量模式</button>
+      </view>
+    </block>
+  </view>
+  <view class="loading-pill" wx:if="{{loading}}"><view class="mini-spinner"></view>正在同步目标</view>
+</view>
+
+<view class="modal-mask" wx:if="{{editModal}}" bindtap="closeEdit"><view class="modal-card" catchtap="noop">
+  <view class="modal-title">编辑今日任务</view>
+  <view class="field"><text class="field-label">任务标题</text><input class="field-control" data-key="editTitle" value="{{editTitle}}" bindinput="editInput"/></view>
+  <view class="field"><text class="field-label">任务说明</text><textarea class="field-control textarea" data-key="editDetail" value="{{editDetail}}" bindinput="editInput"/></view>
+  <view class="field"><text class="field-label">预计分钟</text><input class="field-control" type="number" data-key="editMinutes" value="{{editMinutes}}" bindinput="editInput"/></view>
+  <view class="safe-note">编辑只影响今天这项任务，仍对应原来的星星。</view>
+  <view class="modal-actions"><button class="secondary-button small-button" bindtap="closeEdit">取消</button><button class="primary-button small-button" bindtap="saveEdit">保存</button></view>
 </view></view>
-<view class="modal-mask" wx:if="{{goalModal}}"><view class="modal-card"><view class="modal-title">编辑长期目标</view><textarea class="field-control textarea goal-input" value="{{newGoal}}" bindinput="goalInput"/><view class="modal-actions"><button class="secondary-button small-button" bindtap="closeGoalEdit">取消</button><button class="primary-button small-button" bindtap="changeGoal">重新规划</button></view></view></view>
-<view class="modal-mask" wx:if="{{story}}"><view class="modal-card"><view class="modal-title">{{story.title}}</view><view class="modal-body">{{story.body}}</view><button class="primary-button small-button close" bindtap="closeStory">知道了</button></view></view>
+
+<view class="modal-mask" wx:if="{{previewModal}}" bindtap="closePreview"><view class="modal-card" catchtap="noop">
+  <view class="modal-title">轻量模式预览</view>
+  <view class="modal-body">以下未完成任务将缩短到 15 分钟以内，标题、星星与完成记录均不改变。</view>
+  <view class="preview-item" wx:for="{{previewItems}}" wx:key="taskId"><view>{{item.title}}</view><text>{{item.before}} 分钟 → {{item.after}} 分钟</text></view>
+  <view class="modal-actions"><button class="secondary-button small-button" bindtap="closePreview">暂不调整</button><button class="primary-button small-button" bindtap="confirmLighten">确认调整</button></view>
+</view></view>
+
+<view class="modal-mask" wx:if="{{goalModal}}" bindtap="closeGoal"><view class="modal-card" catchtap="noop">
+  <view class="modal-title">新增并行目标</view>
+  <view class="modal-body">新目标会拥有独立星图系列，并从今天开始释放 3 主线＋2 支线。</view>
+  <view class="field"><text class="field-label">长期目标</text><input class="field-control" data-key="goalTitle" value="{{goalTitle}}" placeholder="例如：30 天完成作品集" bindinput="goalInput"/></view>
+  <view class="field"><text class="field-label">持续天数</text><input class="field-control" type="number" data-key="goalDays" value="{{goalDays}}" bindinput="goalInput"/></view>
+  <view class="modal-actions"><button class="secondary-button small-button" bindtap="closeGoal">取消</button><button class="primary-button small-button" bindtap="submitGoal">创建目标</button></view>
+</view></view>
+
+<view class="modal-mask" wx:if="{{story}}"><view class="modal-card"><view class="modal-title">{{story.title}}</view><view class="modal-body">{{story.body}}</view><button class="primary-button small-button story-close" bindtap="closeStory">知道了</button></view></view>

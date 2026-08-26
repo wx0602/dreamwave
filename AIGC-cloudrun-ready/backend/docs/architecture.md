@@ -91,6 +91,23 @@
   - 写入 `MEMORY.md`
   - 将角色弧光、L1/L2/L3 和记忆世界线一并落盘
 
+### 3.10 每日计划与阶段推进
+- **位置**: `backend/src/services/dailyPlanService.js`、`goalPlanningService.js`、`sessionService.js`
+- **职责**:
+  - AI 将长期学习目标拆成按知识依赖排序的阶段和必做任务池
+  - 每天首次读取状态时，从当前阶段顺序选取最多 3 个任务
+  - 同一天保持计划幂等，跨天归档完成任务并续排未完成任务
+  - 用户标记任务完成后同步阶段任务状态；阶段内全部任务完成即自动切换下一阶段
+  - 不使用正确率、掌握度或 AI 评价作为阶段门槛
+
+### 3.11 每日进度副本
+- **位置**: `backend/src/services/dungeonProgressService.js`、`dungeonNarrativeService.js`
+- **职责**:
+  - 启动副本时冻结当天计划、阶段与已完成主线任务快照
+  - 根据完成数量选择整备、部分推进、今日全清或阶段突破路线
+  - 根据阶段内容切换副本主题；AI 只生成结局叙事，不参与任务判断和奖励计算
+  - 正式奖励由后端固定结算，每份每日计划最多领取一次；演示和重玩不发奖励
+
 ## 4. 运行链路
 
 1. **Boot**
@@ -106,14 +123,18 @@
    - 技能判定与数值结算
    - 生成 `storyText + memorySummary + worldEntities`
    - 更新 L1 记忆和世界实体库
-   - 若主线完成，再生成 `chapterFinale`
-4. **Next Goal**
+   - 同步阶段任务池的完成状态并重新计算阶段进度
+   - 当前阶段完成时自动进入下一阶段
+   - 仅当长期目标全部阶段完成时生成 `chapterFinale`
+4. **Next Long-term Goal**
    - 旧赛季生成 `seasonArchive`
    - 提炼永久称号
    - 启动下一季主线
 5. **Dungeon**
    - 前端读取 `dungeonProfile` 或 `/api/dungeons/current/status.panel`
-   - 用基础面板 + 临时 Buff 生成入口展示
+   - 后端把当天阶段与任务完成快照映射为副本主题和路线
+   - 选项只改变剧情分支状态，最终奖励在结算接口统一计算
+   - 副本结算不修改连续天数
 
 ## 5. 扩展方向
 

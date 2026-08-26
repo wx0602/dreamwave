@@ -8,5 +8,6 @@
 .focus-timer { margin-top:34rpx; color:#fff; font-family:monospace; font-size:104rpx; font-weight:700; letter-spacing:6rpx; }
 .focus-hint { margin-top:28rpx; color:#ecf7ff; line-height:1.7; }
 .pause-button { display:flex; align-items:center; justify-content:center; width:140rpx; height:140rpx; padding:0; border:2rpx solid rgba(255,255,255,.42); border-radius:50%; color:#fff; background:rgba(22,51,76,.58); font-size:48rpx; line-height:140rpx; backdrop-filter:blur(12px); }
-.focus-modal { text-align:center; }
-.focus-actions { display:grid; grid-template-columns:1fr 1fr; gap:16rpx; margin-top:30rpx; }
+.focus-modal { max-width:620rpx; text-align:center; }
+.focus-actions { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:16rpx; width:100%; margin-top:30rpx; }
+.focus-actions button { min-width:0; width:100%; margin:0; padding:0 12rpx; white-space:nowrap; }

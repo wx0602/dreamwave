@@ -28,6 +28,7 @@ npm run check:backend
 | `GET` | `/sessions/current` | `getCurrentSessionState()` |
 | `POST` | `/tasks` | `createTask()` |
 | `POST` | `/tasks/{taskId}/completion` | `completeTask()` |
+| `POST` | `/goals` | `createParallelGoal()` |
 | `POST` | `/goals/advance` | `advanceGoal()` |
 | `GET` | `/dungeons/current/status` | `getCurrentDungeonProfile()` + `getDungeonState()` |
 | `GET` | `/agents/current` | `getCurrentAgentProfile()` |
