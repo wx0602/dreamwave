@@ -80,6 +80,18 @@ Page({
     this.setData({ selectedBundleId: event.currentTarget.dataset.id });
   },
 
+  copySource(event) {
+    const url = text(event.currentTarget.dataset.url);
+    if (!url) {
+      wx.showToast({ title: "该来源暂未提供链接", icon: "none" });
+      return;
+    }
+    wx.setClipboardData({
+      data: url,
+      success: () => wx.showToast({ title: "链接已复制", icon: "success" }),
+    });
+  },
+
   async searchAgain() {
     if (!this.data.draft || this.data.searching) return;
     const title = this.data.userSourceTitle.trim();

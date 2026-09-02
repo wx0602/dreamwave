@@ -13,9 +13,13 @@
 .bundle-card.selected .bundle-check { color:#fff; background:#6fb6ff; }
 .bundle-reason { margin-top:14rpx; color:#607180; line-height:1.65; }
 .source-list { display:flex; flex-direction:column; gap:12rpx; margin-top:20rpx; }
-.source-chip { display:flex; align-items:center; justify-content:space-between; gap:16rpx; padding:18rpx 20rpx; border-radius:20rpx; background:#f5f9fd; color:#405466; font-size:25rpx; }
-.source-chip text:first-child { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.source-chip { display:flex; flex-direction:column; gap:10rpx; padding:18rpx 20rpx; border-radius:20rpx; background:#f5f9fd; color:#405466; font-size:25rpx; }
+.source-main { display:flex; align-items:center; justify-content:space-between; gap:16rpx; }
+.source-title { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .source-origin { flex:none; color:#8aa0b4; font-size:21rpx; }
+.source-link-row { display:flex; align-items:center; gap:12rpx; min-width:0; color:#78a4c7; font-size:20rpx; }
+.source-url { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.source-copy { flex:none; padding:5rpx 10rpx; border-radius:12rpx; color:#4f9ef0; background:#e9f5ff; }
 .bundle-caution { margin-top:16rpx; color:#ad7b45; font-size:22rpx; line-height:1.5; }
 .user-source { padding:26rpx; }
 .user-source .field-control { margin-top:16rpx; }
