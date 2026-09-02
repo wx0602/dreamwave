@@ -46,6 +46,7 @@ const {
 const {
   initializeGoalPlanning,
   ensureGoalPlanning,
+  planRollingHorizon,
   applyRollingTaskPlan,
   buildSideTasks: buildPortfolioSideTasks,
 } = require("./portfolioPlanningService");
@@ -312,7 +313,7 @@ const REAL_CONSTELLATIONS = Object.freeze([
   { id: "andromeda", name: "仙女座" },
   { id: "pegasus", name: "飞马座" },
 ]);
-const PORTFOLIO_MAIN_TASKS_PER_DAY = 3;
+const PORTFOLIO_MAIN_TASKS_PER_DAY = 1;
 const PORTFOLIO_SIDE_TASKS_PER_DAY = 2;
 const STARS_PER_CONSTELLATION_MAP = 15;
 
@@ -336,11 +337,11 @@ function buildPortfolioGoal(state, options = {}) {
   const goal = {
     goalId,
     title: String(options.title || "新的长期目标").trim(),
-    description: String(options.description || `每天完成 ${PORTFOLIO_MAIN_TASKS_PER_DAY} 个主线任务，${durationDays} 天共点亮 ${durationDays * PORTFOLIO_MAIN_TASKS_PER_DAY} 颗星。`).trim(),
+    description: String(options.description || `每天完成 1 个核心任务，${durationDays} 天按来源逐步推进。`).trim(),
     durationDays,
     completedDays: 0,
     completedStars: 0,
-    totalStarCount: durationDays * PORTFOLIO_MAIN_TASKS_PER_DAY,
+    totalStarCount: durationDays,
     starsPerDay: PORTFOLIO_MAIN_TASKS_PER_DAY,
     status: "ACTIVE",
     constellationId: constellation.id,
@@ -363,11 +364,20 @@ function buildPortfolioGoal(state, options = {}) {
   };
   initializeGoalPlanning(
     goal,
-    options.plan,
+    options.sourceBoundPlan || options.plan,
     parseDailyMinutes(state.profile && state.profile.dailyTime, 120)
   );
   ensureGoalSeriesConstellations(state, goal);
   return goal;
+}
+
+function normalizeOptionalSummary(value) {
+  const summary = String(value === null || value === undefined ? "" : value).trim();
+  if (!summary) return "";
+  const length = Array.from(summary).length;
+  if (length < 5) throw new AppError("SUMMARY_TOO_SHORT", "一句话总结至少需要 5 个字", 422);
+  if (length > 100) throw new AppError("SUMMARY_TOO_LONG", "一句话总结最多 100 个字", 422);
+  return summary;
 }
 
 function refreshGoalSeriesMetrics(goal) {
@@ -376,7 +386,12 @@ function refreshGoalSeriesMetrics(goal) {
     const nodes = (map.nodeIds || []).map((nodeId) => nodeById.get(nodeId)).filter(Boolean);
     map.starCount = (map.nodeIds || []).length;
     map.completedStars = nodes.filter((node) => node.status === "DONE").length;
-    if (map.starCount > 0 && map.completedStars === map.starCount) {
+    const isFinalPartialMap = map.starCount > 0
+      && map.starCount < STARS_PER_CONSTELLATION_MAP
+      && Number(goal.plannedThroughDay || 0) >= Number(goal.durationDays || 0);
+    if (map.starCount > 0
+      && map.completedStars === map.starCount
+      && (map.starCount === STARS_PER_CONSTELLATION_MAP || isFinalPartialMap)) {
       map.status = "COMPLETED";
       map.completedAt = map.completedAt || nodes.map((node) => node.completedAt).filter(Boolean).sort().slice(-1)[0] || new Date().toISOString();
     } else {
@@ -389,8 +404,8 @@ function refreshGoalSeriesMetrics(goal) {
 }
 
 function ensureGoalSeriesConstellations(state, goal) {
-  const totalStarCount = Number(goal.totalStarCount || goal.durationDays * PORTFOLIO_MAIN_TASKS_PER_DAY);
-  const expectedCount = Math.ceil(totalStarCount / STARS_PER_CONSTELLATION_MAP);
+  const nodes = Array.isArray(goal.nodes) ? goal.nodes : [];
+  const expectedCount = Math.ceil(nodes.length / STARS_PER_CONSTELLATION_MAP);
   const existing = Array.isArray(goal.constellations) ? goal.constellations : [];
   let changed = existing.length !== expectedCount;
   const offset = Math.max(0, Number(goal.constellationOffset) || 0);
@@ -398,10 +413,7 @@ function ensureGoalSeriesConstellations(state, goal) {
     const previous = existing[index] || {};
     const template = REAL_CONSTELLATIONS[(offset + index) % REAL_CONSTELLATIONS.length];
     const start = index * STARS_PER_CONSTELLATION_MAP;
-    const nodeIds = Array.from(
-      { length: Math.min(STARS_PER_CONSTELLATION_MAP, totalStarCount - start) },
-      (_, nodeIndex) => `${goal.goalId}-star-${start + nodeIndex + 1}`
-    );
+    const nodeIds = nodes.slice(start, start + STARS_PER_CONSTELLATION_MAP).map((node) => node.nodeId);
     if (previous.constellationId !== template.id || JSON.stringify(previous.nodeIds || []) !== JSON.stringify(nodeIds)) {
       changed = true;
     }
@@ -412,7 +424,7 @@ function ensureGoalSeriesConstellations(state, goal) {
       constellationName: template.name,
       nodeIds,
       starCount: nodeIds.length,
-      completedStars: Number(previous.completedStars || 0),
+      completedStars: nodes.slice(start, start + STARS_PER_CONSTELLATION_MAP).filter((node) => node.status === "DONE").length,
       status: previous.status || (index === 0 ? "ACTIVE" : "LOCKED"),
       completedAt: previous.completedAt || null,
     };
@@ -428,18 +440,24 @@ function ensureGoalSeriesConstellations(state, goal) {
 function refreshPortfolioGoalMetrics(goal) {
   const nodes = Array.isArray(goal && goal.nodes) ? goal.nodes : [];
   goal.starsPerDay = PORTFOLIO_MAIN_TASKS_PER_DAY;
-  goal.totalStarCount = Number(goal.durationDays || 0) * PORTFOLIO_MAIN_TASKS_PER_DAY;
+  if (!Number(goal.totalStarCount)) {
+    goal.totalStarCount = Number(goal.durationDays || 0);
+  }
   goal.completedStars = nodes.filter((node) => node && node.status === "DONE").length;
   let completedDays = 0;
   for (let day = 1; day <= Number(goal.durationDays || 0); day += 1) {
     const dayNodes = nodes.filter((node) => node && Number(node.day) === day);
-    if (dayNodes.length === PORTFOLIO_MAIN_TASKS_PER_DAY && dayNodes.every((node) => node.status === "DONE")) {
+    if (dayNodes.length > 0 && dayNodes.every((node) => node.status === "DONE")) {
       completedDays += 1;
     }
   }
   goal.completedDays = completedDays;
   refreshGoalSeriesMetrics(goal);
-  if (goal.completedStars >= goal.totalStarCount && goal.totalStarCount > 0) {
+  const planComplete = Number(goal.plannedThroughDay || 0) >= Number(goal.durationDays || 0)
+    && nodes.length >= Number(goal.durationDays || 0)
+    && goal.completedStars >= goal.totalStarCount
+    && goal.totalStarCount > 0;
+  if (planComplete) {
     goal.status = "COMPLETED";
     goal.completedAt = goal.completedAt || new Date().toISOString();
   } else {
@@ -450,12 +468,13 @@ function refreshPortfolioGoalMetrics(goal) {
 
 function ensurePortfolioGoalShape(state, goal) {
   if (!goal || !Number(goal.durationDays)) return false;
-  const expectedCount = Number(goal.durationDays) * PORTFOLIO_MAIN_TASKS_PER_DAY;
+  const expectedCount = Number(goal.planningVersion || 0) >= 4
+    ? Number(goal.totalStarCount || goal.durationDays)
+    : Number(goal.durationDays) * PORTFOLIO_MAIN_TASKS_PER_DAY;
   const previousPlanningVersion = Number(goal.planningVersion || 0);
   const before = `${goal.planningVersion}|${(goal.nodes || []).length}|${goal.completedStars}|${(goal.constellations || []).length}`;
   goal.nodes = (Array.isArray(goal.nodes) ? goal.nodes : []).filter((node) => (
     node && Number(node.day) >= 1 && Number(node.day) <= Number(goal.durationDays)
-      && Number(node.slot) >= 1 && Number(node.slot) <= PORTFOLIO_MAIN_TASKS_PER_DAY
   ));
   const matchingPlan = state.goalPlan && state.goalPlan.longTermGoal === goal.title ? state.goalPlan : null;
   ensureGoalPlanning(
@@ -463,19 +482,11 @@ function ensurePortfolioGoalShape(state, goal) {
     matchingPlan,
     parseDailyMinutes(state.profile && state.profile.dailyTime, 120)
   );
-  const changedIds = new Map();
   goal.nodes.forEach((node) => {
-    const canonicalId = `${goal.goalId}-star-${(Number(node.day) - 1) * PORTFOLIO_MAIN_TASKS_PER_DAY + Number(node.slot)}`;
-    if (node.nodeId !== canonicalId) changedIds.set(node.nodeId, canonicalId);
-    node.nodeId = canonicalId;
+    if (!node.nodeId) node.nodeId = `${goal.goalId}-core-${node.day}-${allocateId(state, "node")}`;
+    node.slot = Number(node.slot) || 1;
+    node.priorityTier = "CORE";
   });
-  if (changedIds.size > 0) {
-    (state.tasks || []).forEach((task) => {
-      if (task.portfolioGoalId === goal.goalId && changedIds.has(task.portfolioNodeId)) {
-        task.portfolioNodeId = changedIds.get(task.portfolioNodeId);
-      }
-    });
-  }
   if (previousPlanningVersion !== Number(goal.planningVersion)) {
     goal.aiRollingUpgradePending = previousPlanningVersion > 0;
     const nodeById = new Map(goal.nodes.map((node) => [node.nodeId, node]));
@@ -495,8 +506,10 @@ function ensurePortfolioGoalShape(state, goal) {
       task.qualityScore = node.qualityScore;
     });
   }
-  goal.totalStarCount = expectedCount;
-  goal.description = `每天完成 ${PORTFOLIO_MAIN_TASKS_PER_DAY} 个主线任务，${goal.durationDays} 天共点亮 ${expectedCount} 颗星。`;
+  goal.totalStarCount = Number(goal.totalStarCount || expectedCount || goal.durationDays);
+  goal.starsPerDay = PORTFOLIO_MAIN_TASKS_PER_DAY;
+  goal.plannedThroughDay = Math.max(Number(goal.plannedThroughDay || 0), ...goal.nodes.map((node) => Number(node.day) || 0));
+  goal.description = `每天完成 1 个核心任务，${goal.durationDays} 天按来源逐步推进。`;
   const seriesChanged = ensureGoalSeriesConstellations(state, goal);
   refreshPortfolioGoalMetrics(goal);
   return seriesChanged || before !== `${goal.planningVersion}|${goal.nodes.length}|${goal.completedStars}|${goal.constellations.length}`;
@@ -504,6 +517,7 @@ function ensurePortfolioGoalShape(state, goal) {
 
 function ensureGoalPortfolioState(state) {
   if (state.goalPortfolio && Array.isArray(state.goalPortfolio.goals) && state.goalPortfolio.goals.length > 0) {
+    state.goalPortfolio.version = 2;
     let changed = false;
     state.goalPortfolio.goals.forEach((goal) => {
       if (ensurePortfolioGoalShape(state, goal)) changed = true;
@@ -511,7 +525,7 @@ function ensureGoalPortfolioState(state) {
     if (state.transition) state.transition.needsNewGoalPrompt = false;
     return changed;
   }
-  const portfolio = { version: 1, goals: [] };
+  const portfolio = { version: 2, goals: [] };
   if (!state.goalPlan) {
     state.goalPortfolio = portfolio;
     return true;
@@ -522,6 +536,7 @@ function ensureGoalPortfolioState(state) {
     deadline: state.profile && state.profile.deadline,
     plan: state.goalPlan,
     constellationIndex: 0,
+    priority: "PRIMARY",
   });
   const completedPlanTasks = (state.goalPlan.stageGoals || [])
     .flatMap((stage) => stage.tasks || [])
@@ -599,7 +614,13 @@ function collectCompletedPortfolioConstellations(state, goal) {
       description: `「${goal.title}」系列的第 ${map.order} 张星图。`,
       completedAt: map.completedAt,
       starCount: stars.length,
-      stars: stars.map((node) => ({ taskId: node.nodeId, title: node.title, completedAt: node.completedAt })),
+      stars: stars.map((node) => ({
+        taskId: node.nodeId,
+        title: node.title,
+        completedAt: node.completedAt,
+        sourceTitle: node.sourceRef && node.sourceRef.sourceTitle || null,
+        completionSummary: node.completionSummary || null,
+      })),
       rewardToolId: tool.id,
       rewardToolName: tool.name,
     });
@@ -761,6 +782,11 @@ function mapTasks(state, tasks, type = "main", context = {}) {
       carryoverCount: Number(task.carryoverCount || 0),
       difficulty: Number(task.difficulty || (type === "side" ? 1 : 2)),
       narrativeHook: String(task.narrativeHook || "").trim(),
+      sourceRef: task.sourceRef ? clone(task.sourceRef) : null,
+      priorityTier: task.priorityTier || (type === "main" ? "CORE" : "OPTIONAL"),
+      selectionReason: String(task.selectionReason || "").trim(),
+      completionSummary: "",
+      originDraftId: task.originDraftId || context.originDraftId || null,
       type,
       done: false,
       completedAt: null,
@@ -772,6 +798,23 @@ function createStarToolTask(state, options) {
   const planDate = state.dailyPlan && state.dailyPlan.planDate
     ? state.dailyPlan.planDate
     : getPlanDate(new Date(), state.profile && state.profile.timeZone || DEFAULT_TIME_ZONE);
+
+  const optionalTasks = (state.tasks || []).filter((task) => task && !task.done && task.priorityTier === "OPTIONAL");
+  if (optionalTasks.length >= PORTFOLIO_SIDE_TASKS_PER_DAY) {
+    const automatic = optionalTasks.find((task) => task.source !== "CUSTOM");
+    if (!automatic) {
+      if (options && options.allowSkipOnLimit) {
+        return null;
+      }
+      throw new AppError("DAILY_OPTIONAL_LIMIT_REACHED", "今天的可选任务已满，请先完成一个可选任务", 409);
+    }
+    state.tasks = state.tasks.filter((task) => task.id !== automatic.id);
+    archiveUnscheduledTask(state, automatic, "OPTIONAL_REPLACED_BY_CUSTOM");
+    if (state.dailyPlan) {
+      state.dailyPlan.taskIds = state.dailyPlan.taskIds.filter((id) => id !== automatic.id);
+      state.dailyPlan.optionalTaskIds = (state.dailyPlan.optionalTaskIds || []).filter((id) => id !== automatic.id);
+    }
+  }
   const dailyPlanId = state.dailyPlan && state.dailyPlan.id;
   const [task] = mapTasks(
     state,
@@ -817,7 +860,11 @@ function materializeScheduledStarReviews(state, now = new Date()) {
       sourceTaskId: review.sourceTaskId,
       reviewOffset: review.offsetDays,
       deadlineAt: review.dueDate,
+      allowSkipOnLimit: true,
     });
+    if (!task) {
+      return;
+    }
     review.materializedTaskId = task.id;
     review.materializedAt = new Date().toISOString();
     changed = true;
@@ -1147,6 +1194,9 @@ function updateDailyPlanMetrics(state) {
     plannedMinutes: tasks.reduce((sum, task) => sum + Number(task.estimatedMinutes || 0), 0),
     completedMinutes: completed.reduce((sum, task) => sum + Number(task.estimatedMinutes || 0), 0),
   };
+  state.dailyPlan.coreTaskId = tasks.find((task) => task.priorityTier === "CORE")?.id || state.dailyPlan.coreTaskId || null;
+  state.dailyPlan.optionalTaskIds = tasks.filter((task) => task.priorityTier === "OPTIONAL").map((task) => task.id);
+  state.dailyPlan.coreReleased = Boolean(state.dailyPlan.coreReleased || state.dailyPlan.coreTaskId);
   state.dailyPlan.status = tasks.length > 0 && completed.length === tasks.length ? "COMPLETED" : "ACTIVE";
   state.dailyPlan.completedAt = state.dailyPlan.status === "COMPLETED"
     ? state.dailyPlan.completedAt || new Date().toISOString()
@@ -1295,11 +1345,24 @@ function syncAvailableGoalTasks(state, goal) {
     task.weeklyMilestoneId = node.weeklyMilestoneId;
     task.weeklyMilestoneTitle = node.weeklyMilestoneTitle;
     task.qualityScore = node.qualityScore;
+    task.sourceRef = node.sourceRef || task.sourceRef || null;
+    task.priorityTier = "CORE";
+    task.selectionReason = node.selectionReason || task.selectionReason || "按已确认路线安排。";
   });
 }
 
 async function ensureAiRollingHorizon(state, goal) {
   if (!goal || goal.status !== "ACTIVE" || !goal.planningBlueprint) return false;
+  if (Number(goal.planningVersion || 0) >= 4) {
+    const firstAvailable = (goal.nodes || []).find((node) => node.status === "AVAILABLE");
+    const firstLocked = (goal.nodes || []).find((node) => node.status === "LOCKED");
+    const startDay = Number((firstAvailable || firstLocked || {}).day || goal.completedDays + 1 || 1);
+    if (!startDay || startDay > Number(goal.durationDays || 0)) return false;
+    const endDay = Math.min(Number(goal.durationDays), startDay + 6);
+    const before = goal.nodes.length;
+    planRollingHorizon(goal, startDay, endDay - startDay + 1, false);
+    return goal.nodes.length !== before;
+  }
   const firstAvailable = (goal.nodes || []).find((node) => node.status === "AVAILABLE");
   const firstLocked = (goal.nodes || []).find((node) => node.status === "LOCKED");
   const startDay = Number((firstAvailable || firstLocked || {}).day || goal.completedDays + 1 || 1);
@@ -1342,20 +1405,177 @@ async function ensureAiRollingHorizon(state, goal) {
   return true;
 }
 
+function getPriorityGoal(state, priority) {
+  return (state.goalPortfolio && Array.isArray(state.goalPortfolio.goals)
+    ? state.goalPortfolio.goals : [])
+    .find((goal) => goal && goal.status === "ACTIVE" && goal.priority === priority);
+}
+
+function decoratePortfolioTask(task, goal, node, planDate) {
+  if (!task) return task;
+  task.portfolioGoalId = goal.goalId;
+  task.portfolioNodeId = node ? node.nodeId : null;
+  task.portfolioDay = node ? Number(node.day) : null;
+  task.portfolioSlot = node ? Number(node.slot || 1) : null;
+  task.portfolioReleaseDate = planDate;
+  task.goalTitle = goal.title;
+  task.priorityTier = node ? "CORE" : "OPTIONAL";
+  task.sourceRef = task.sourceRef || (node && node.sourceRef) || null;
+  task.selectionReason = task.selectionReason || (node && node.selectionReason) || "按已确认路线安排。";
+  task.taskRole = task.taskRole || (node ? node.taskRole : "OPTIONAL");
+  task.taskRoleLabel = task.taskRoleLabel || (node ? node.taskRoleLabel : "可选行动");
+  task.phaseId = task.phaseId || (node && node.phaseId) || null;
+  task.phaseTitle = task.phaseTitle || (node && node.phaseTitle) || null;
+  task.weeklyMilestoneId = task.weeklyMilestoneId || (node && node.weeklyMilestoneId) || null;
+  task.weeklyMilestoneTitle = task.weeklyMilestoneTitle || (node && node.weeklyMilestoneTitle) || null;
+  task.qualityScore = task.qualityScore || (node && node.qualityScore) || 0;
+  return task;
+}
+
+function findNextCoreNode(goal) {
+  return (goal.nodes || [])
+    .filter((node) => node && (node.status === "AVAILABLE" || node.status === "LOCKED"))
+    .sort((left, right) => Number(left.day || 0) - Number(right.day || 0) || Number(left.slot || 0) - Number(right.slot || 0))[0] || null;
+}
+
+function releaseCoreTaskForGoal(state, goal, planDate, dailyPlanId) {
+  if (!goal || goal.status !== "ACTIVE" || goal.priority !== "PRIMARY") return [];
+  const existing = (state.tasks || []).find((task) => task && !task.done && task.priorityTier === "CORE");
+  if (existing) return [];
+  if (state.dailyPlan && state.dailyPlan.coreReleased) return [];
+  const node = findNextCoreNode(goal);
+  if (!node) return [];
+  const [task] = mapTasks(state, [{
+    title: node.title,
+    detail: node.detail,
+    estimatedMinutes: node.estimatedMinutes,
+    rewardGrowth: 14,
+    rewardResource: 14,
+    dailyPlanId,
+    scheduledDate: planDate,
+    source: "LONG_TERM",
+    sourceRef: node.sourceRef,
+    priorityTier: "CORE",
+    selectionReason: node.selectionReason,
+  }], "main", { dailyPlanId, scheduledDate: planDate, source: "LONG_TERM" });
+  decoratePortfolioTask(task, goal, node, planDate);
+  node.status = "AVAILABLE";
+  node.releasedDate = planDate;
+  goal.lastReleasedDate = planDate;
+  state.dailyPlan.coreReleased = true;
+  state.dailyPlan.coreTaskId = task.id;
+  return task ? [task] : [];
+}
+
+function optionalTemplateForGoal(goal, day) {
+  if (!goal) return [];
+  return buildPortfolioSideTasks(goal, day).slice(0, PORTFOLIO_SIDE_TASKS_PER_DAY).map((template) => ({
+    ...template,
+    sourceRef: template.sourceRef || (goal.learningSources && goal.learningSources[0] ? {
+      sourceId: goal.learningSources[0].sourceId,
+      sourceTitle: goal.learningSources[0].title,
+      locatorType: "URL",
+      locatorLabel: goal.learningSources[0].title,
+      locatorUrl: goal.learningSources[0].url || "",
+      verified: false,
+    } : null),
+  }));
+}
+
+function buildOptionalCandidates(state, primary, secondary, planDate, dailyPlanId) {
+  const candidates = [];
+  const primaryNode = primary && findNextCoreNode(primary);
+  optionalTemplateForGoal(primary, primaryNode ? primaryNode.day : 1).forEach((template) => {
+    candidates.push({ goal: primary, template, source: "LONG_TERM_OPTIONAL" });
+  });
+  const secondaryNode = secondary && findNextCoreNode(secondary);
+  optionalTemplateForGoal(secondary, secondaryNode ? secondaryNode.day : 1).forEach((template) => {
+    candidates.push({ goal: secondary, template, source: "SECONDARY_OPTIONAL" });
+  });
+  const existingOptional = (state.tasks || []).filter((task) => task && !task.done && task.priorityTier === "OPTIONAL");
+  const existingKeys = new Set(existingOptional.map((task) => `${task.portfolioGoalId || "custom"}|${task.title}`));
+  return candidates.filter((entry) => !existingKeys.has(`${entry.goal.goalId}|${entry.template.title}`))
+    .slice(0, PORTFOLIO_SIDE_TASKS_PER_DAY)
+    .map((entry) => {
+      const [task] = mapTasks(state, [{
+        ...entry.template,
+        rewardGrowth: 6,
+        rewardResource: 8,
+        dailyPlanId,
+        scheduledDate: planDate,
+        source: entry.source,
+        priorityTier: "OPTIONAL",
+      }], "side", { dailyPlanId, scheduledDate: planDate, source: entry.source });
+      decoratePortfolioTask(task, entry.goal, null, planDate);
+      task.priorityTier = "OPTIONAL";
+      task.portfolioNodeId = null;
+      task.portfolioSlot = null;
+      task.portfolioDay = entry.goal && findNextCoreNode(entry.goal) ? findNextCoreNode(entry.goal).day : null;
+      return task;
+    }).filter(Boolean);
+}
+
+function archiveUnscheduledTask(state, task, reason) {
+  state.taskHistory.unshift({
+    ...task,
+    status: "ARCHIVED",
+    archivedReason: reason,
+    archivedAt: new Date().toISOString(),
+  });
+}
+
+function retainPendingForNextDay(state, previousPlan) {
+  const pending = (state.tasks || []).filter((task) => task && !task.done);
+  const core = pending.filter((task) => task.priorityTier === "CORE" || task.portfolioNodeId);
+  const keep = [];
+  if (core[0]) {
+    core[0].priorityTier = "CORE";
+    keep.push(core[0]);
+  }
+  let customCount = 0;
+  pending.forEach((task) => {
+    if (keep.includes(task)) return;
+    if (task.source === "CUSTOM" && customCount < PORTFOLIO_SIDE_TASKS_PER_DAY) {
+      task.priorityTier = "OPTIONAL";
+      keep.push(task);
+      customCount += 1;
+      return;
+    }
+    archiveUnscheduledTask(state, task, task.priorityTier === "OPTIONAL" ? "OPTIONAL_EXPIRED" : "PLANNING_V4_RESHAPE");
+  });
+  const planId = state.dailyPlan && state.dailyPlan.id;
+  const rolloverCount = previousPlan ? 1 : 0;
+  keep.forEach((task) => {
+    task.dailyPlanId = planId;
+    task.scheduledDate = previousPlan && previousPlan.planDate || task.scheduledDate;
+    task.carryoverCount = Number(task.carryoverCount || 0) + rolloverCount;
+  });
+  return keep;
+}
+
+function scheduleGlobalDailyTasks(state, primary, secondary, planDate, dailyPlanId) {
+  const generated = [];
+  if (primary) generated.push(...releaseCoreTaskForGoal(state, primary, planDate, dailyPlanId));
+  const existingOptionalCount = (state.tasks || []).filter((task) => task && !task.done && task.priorityTier === "OPTIONAL").length;
+  const remaining = Math.max(0, PORTFOLIO_SIDE_TASKS_PER_DAY - existingOptionalCount);
+  if (remaining > 0) generated.push(...buildOptionalCandidates(state, primary, secondary, planDate, dailyPlanId).slice(0, remaining));
+  return generated;
+}
+
 async function ensurePortfolioDailyPlan(state, options = {}) {
   const timeZone = String(state.profile && state.profile.timeZone || DEFAULT_TIME_ZONE).trim() || DEFAULT_TIME_ZONE;
   const planDate = getPlanDate(options.now || new Date(), timeZone);
-  if (!options.force && state.dailyPlan && state.dailyPlan.planDate === planDate) {
-    const generated = [];
-    for (const goal of state.goalPortfolio.goals || []) {
-      await ensureAiRollingHorizon(state, goal);
-      generated.push(...releasePortfolioGoalTasks(state, goal, planDate, state.dailyPlan.id));
-    }
-    if (generated.length > 0) {
+  const sameDay = state.dailyPlan && state.dailyPlan.planDate === planDate;
+  if (sameDay) {
+    const primary = getPriorityGoal(state, "PRIMARY");
+    const secondary = getPriorityGoal(state, "SECONDARY");
+    if (primary) await ensureAiRollingHorizon(state, primary);
+    if (secondary) await ensureAiRollingHorizon(state, secondary);
+    const generated = scheduleGlobalDailyTasks(state, primary, secondary, planDate, state.dailyPlan.id);
+    if (generated.length) {
       state.tasks.push(...generated);
-      state.dailyPlan.taskIds = state.tasks
-        .filter((task) => task.dailyPlanId === state.dailyPlan.id)
-        .map((task) => task.id);
+      state.dailyPlan.taskIds = state.tasks.map((task) => task.id);
+      state.dailyPlan.optionalTaskIds = state.tasks.filter((task) => task.priorityTier === "OPTIONAL").map((task) => task.id);
       state.dailyPlan.version = Number(state.dailyPlan.version || 1) + 1;
     }
     updateDailyPlanMetrics(state);
@@ -1365,26 +1585,12 @@ async function ensurePortfolioDailyPlan(state, options = {}) {
   const previousPlan = state.dailyPlan;
   if (previousPlan) archiveCurrentDailyPlan(state);
   archiveCompletedExecutionTasks(state);
-  const pendingTasks = (state.tasks || []).filter((task) => task && !task.done);
+  state.tasks = retainPendingForNextDay(state, previousPlan);
   const dailyPlanId = allocateId(state, "daily-plan");
-  pendingTasks.forEach((task) => {
-    if (task.portfolioGoalId && !task.portfolioReleaseDate) {
-      const linked = findPortfolioGoalAndNode(state, task.portfolioGoalId, task.portfolioNodeId);
-      task.portfolioReleaseDate = linked.node && linked.node.releasedDate || task.scheduledDate || null;
-    }
+  state.tasks.forEach((task) => {
     task.dailyPlanId = dailyPlanId;
     task.scheduledDate = planDate;
-    task.carryoverCount = Number(task.carryoverCount || 0) + (previousPlan ? 1 : 0);
   });
-
-  const generated = [];
-  for (const goal of state.goalPortfolio.goals || []) {
-    if (!goal || goal.status !== "ACTIVE") continue;
-    await ensureAiRollingHorizon(state, goal);
-    if (goal.lastReleasedDate === planDate) continue;
-    generated.push(...releasePortfolioGoalTasks(state, goal, planDate, dailyPlanId));
-  }
-  state.tasks = [...pendingTasks, ...generated];
   state.dailyPlan = {
     id: dailyPlanId,
     planDate,
@@ -1393,15 +1599,27 @@ async function ensurePortfolioDailyPlan(state, options = {}) {
     status: "ACTIVE",
     capacityMinutes: parseDailyMinutes(state.profile && state.profile.dailyTime, 120),
     taskIds: state.tasks.map((task) => task.id),
+    coreReleased: state.tasks.some((task) => task.priorityTier === "CORE" && !task.done),
+    coreTaskId: state.tasks.find((task) => task.priorityTier === "CORE" && !task.done)?.id || null,
+    optionalTaskIds: state.tasks.filter((task) => task.priorityTier === "OPTIONAL" && !task.done).map((task) => task.id),
     source: options.source || "GOAL_PORTFOLIO",
     version: 1,
-    message: generated.length > 0
-      ? `今天已生成 ${generated.length} 个长期目标任务。`
-      : "今天没有新的长期目标节点。",
+    message: "",
     generatedAt: new Date().toISOString(),
     completedAt: null,
     metrics: {},
   };
+  const primary = getPriorityGoal(state, "PRIMARY");
+  const secondary = getPriorityGoal(state, "SECONDARY");
+  if (primary) await ensureAiRollingHorizon(state, primary);
+  if (secondary) await ensureAiRollingHorizon(state, secondary);
+  const generated = scheduleGlobalDailyTasks(state, primary, secondary, planDate, dailyPlanId);
+  state.tasks.push(...generated);
+  state.dailyPlan.taskIds = state.tasks.map((task) => task.id);
+  state.dailyPlan.optionalTaskIds = state.tasks.filter((task) => task.priorityTier === "OPTIONAL").map((task) => task.id);
+  state.dailyPlan.message = state.dailyPlan.coreTaskId
+    ? `今天先完成 1 个核心任务${state.dailyPlan.optionalTaskIds.length ? `，还有 ${state.dailyPlan.optionalTaskIds.length} 个可选行动。` : "。"}`
+    : "今天没有可发布的核心任务。";
   updateDailyPlanMetrics(state);
   return true;
 }
@@ -2258,6 +2476,170 @@ function migrateGoalPlanningState(state) {
   return changed;
 }
 
+function migratePortfolioPlanningV4(state) {
+  if (!state.goalPortfolio || !Array.isArray(state.goalPortfolio.goals)) return false;
+  let changed = false;
+  state.goalPortfolio.version = 2;
+  const activeGoals = state.goalPortfolio.goals.filter((goal) => goal && goal.status === "ACTIVE");
+  if (!activeGoals.some((goal) => goal.priority === "PRIMARY")) {
+    activeGoals.forEach((goal, index) => {
+      const next = index === 0 ? "PRIMARY" : index === 1 ? "SECONDARY" : "INACTIVE";
+      if (goal.priority !== next) { goal.priority = next; changed = true; }
+    });
+  }
+  state.goalPortfolio.goals.forEach((goal) => {
+    if (!goal || Number(goal.planningVersion || 0) >= 4) {
+      if (goal && !goal.plannedThroughDay) {
+        goal.plannedThroughDay = Math.max(0, ...(goal.nodes || []).map((node) => Number(node.day) || 0));
+        changed = true;
+      }
+      return;
+    }
+    const originalNodes = Array.isArray(goal.nodes) ? goal.nodes : [];
+    const oldById = new Map(originalNodes.map((node) => [node.nodeId, node]));
+    const orderedIds = Array.isArray(goal.constellations) && goal.constellations.length
+      ? goal.constellations.flatMap((map) => Array.isArray(map.nodeIds) ? map.nodeIds : [])
+      : originalNodes.slice().sort((a, b) => Number(a.day || 0) - Number(b.day || 0) || Number(a.slot || 0) - Number(b.slot || 0)).map((node) => node.nodeId);
+    const orderedNodes = [...new Set(orderedIds)].map((id) => oldById.get(id)).filter(Boolean);
+    originalNodes.forEach((node) => { if (!orderedNodes.includes(node)) orderedNodes.push(node); });
+    const doneNodes = orderedNodes.filter((node) => node.status === "DONE").map((node) => ({
+      ...node,
+      legacyNode: true,
+      priorityTier: "CORE",
+      sourceRef: node.sourceRef || null,
+    }));
+    const linkedPending = (state.tasks || []).filter((task) => (
+      task && task.portfolioGoalId === goal.goalId && !task.done
+    ));
+    const coreTask = linkedPending.find((task) => task.priorityTier === "CORE" || task.type === "main") || linkedPending[0];
+    const coreNode = coreTask && orderedNodes.find((node) => node.status !== "DONE" && node.nodeId === coreTask.portfolioNodeId);
+    const migratedNodes = [...doneNodes];
+    let currentCoreNode = coreNode && !migratedNodes.some((node) => node.nodeId === coreNode.nodeId)
+      ? { ...coreNode, legacyNode: true, priorityTier: "CORE", status: "AVAILABLE", releasedDate: coreNode.releasedDate || getPlanDate(new Date(), state.profile && state.profile.timeZone || DEFAULT_TIME_ZONE), sourceRef: coreTask.sourceRef || coreNode.sourceRef || null }
+      : null;
+    // Some older snapshots kept the pending execution task but lost its
+    // portfolioNodeId. Preserve that work as today's core node instead of
+    // silently demoting it to an optional task during migration.
+    if (coreTask && !currentCoreNode) {
+      const durationDays = parseGoalDurationDays(goal.durationDays, 30);
+      const fallbackDay = Math.max(
+        1,
+        Math.min(
+          durationDays,
+          Number(coreTask.portfolioDay || coreTask.scheduledDay || 0)
+            || Math.max(1, Number(goal.completedDays || 0) + 1)
+        )
+      );
+      currentCoreNode = {
+        nodeId: `${goal.goalId}-core-${fallbackDay}-${allocateId(state, "node")}`,
+        day: fallbackDay,
+        slot: 1,
+        status: "AVAILABLE",
+        releasedDate: coreTask.scheduledDate || getPlanDate(new Date(), state.profile && state.profile.timeZone || DEFAULT_TIME_ZONE),
+        completedAt: null,
+        planningStatus: "PLANNED",
+        qualityScore: 0,
+        taskRole: "LEARN",
+        taskRoleLabel: "核心推进",
+        priorityTier: "CORE",
+        sourceRef: coreTask.sourceRef || null,
+        selectionReason: "迁移时保留原有待执行核心任务。",
+        legacyNode: true,
+        title: coreTask.title || `第 ${fallbackDay} 天：推进「${goal.title}」的一个具体范围`,
+        detail: coreTask.detail || "打开已确认的学习材料，完成一个可执行动作并记录结果。",
+        estimatedMinutes: Math.max(5, Math.min(90, Number(coreTask.estimatedMinutes || 25))),
+      };
+      changed = true;
+    }
+    if (currentCoreNode) migratedNodes.push(currentCoreNode);
+    const lastTouchedDay = Math.max(0, ...migratedNodes.map((node) => Number(node.day) || 0));
+    const durationDays = parseGoalDurationDays(goal.durationDays, 30);
+    let nextNodeDay = Math.max(1, lastTouchedDay + 1);
+    while (nextNodeDay <= durationDays) {
+      migratedNodes.push({
+        nodeId: `${goal.goalId}-core-${nextNodeDay}-${allocateId(state, "node")}`,
+        day: nextNodeDay,
+        slot: 1,
+        status: "LOCKED",
+        releasedDate: null,
+        completedAt: null,
+        planningStatus: "PLANNED",
+        qualityScore: 0,
+        taskRole: "LEARN",
+        taskRoleLabel: "核心推进",
+        priorityTier: "CORE",
+        sourceRef: null,
+        selectionReason: "迁移后按新规则逐日推进。",
+        legacyNode: false,
+        title: `第 ${nextNodeDay} 天：推进「${goal.title}」的下一个具体范围`,
+        detail: "打开已确认的学习材料，完成一个可执行动作并记录结果。",
+        estimatedMinutes: Math.max(5, Math.min(90, Math.round(parseDailyMinutes(state.profile && state.profile.dailyTime, 120) * 0.6))),
+      });
+      nextNodeDay += 1;
+    }
+    const nodeIds = new Set(migratedNodes.map((node) => node.nodeId));
+    let optionalKept = 0;
+    linkedPending.forEach((task) => {
+      if (coreTask && task.id === coreTask.id && currentCoreNode) {
+        task.type = "main";
+        task.priorityTier = "CORE";
+        task.portfolioNodeId = currentCoreNode.nodeId;
+        task.portfolioSlot = 1;
+        task.portfolioDay = currentCoreNode.day;
+        task.sourceRef = currentCoreNode.sourceRef || task.sourceRef || null;
+        return;
+      }
+      if (optionalKept < 2) {
+        task.type = "side";
+        task.priorityTier = "OPTIONAL";
+        task.portfolioNodeId = null;
+        task.portfolioSlot = null;
+        task.sourceRef = task.sourceRef || null;
+        optionalKept += 1;
+        return;
+      }
+      state.taskHistory.unshift({ ...task, status: "ARCHIVED", archivedReason: "PLANNING_V4_RESHAPE", archivedAt: new Date().toISOString() });
+      state.tasks = state.tasks.filter((entry) => entry.id !== task.id);
+      changed = true;
+    });
+    goal.nodes = migratedNodes.filter((node, index, list) => node && node.nodeId && list.findIndex((entry) => entry.nodeId === node.nodeId) === index);
+    goal.planningVersion = 4;
+    goal.starsPerDay = 1;
+    goal.totalStarCount = goal.nodes.length;
+    goal.completedStars = goal.nodes.filter((node) => node.status === "DONE").length;
+    goal.completedDays = 0;
+    goal.plannedThroughDay = durationDays;
+    goal.migratedToPlanningV4At = goal.migratedToPlanningV4At || new Date().toISOString();
+    goal.description = `每天完成 1 个核心任务，${goal.durationDays} 天按来源逐步推进。`;
+    goal.planStatus = goal.planStatus || "LEGACY_MIGRATED";
+    const oldMaps = Array.isArray(goal.constellations) ? goal.constellations : [];
+    const mapCount = Math.ceil(goal.nodes.length / STARS_PER_CONSTELLATION_MAP);
+    goal.constellations = Array.from({ length: mapCount }, (_, index) => {
+      const previous = oldMaps[index] || {};
+      const nodes = goal.nodes.slice(index * STARS_PER_CONSTELLATION_MAP, (index + 1) * STARS_PER_CONSTELLATION_MAP);
+      const complete = nodes.length === STARS_PER_CONSTELLATION_MAP
+        ? nodes.every((node) => node.status === "DONE")
+        : goal.plannedThroughDay >= goal.durationDays && nodes.length > 0 && nodes.every((node) => node.status === "DONE");
+      return {
+        mapId: previous.mapId || allocateId(state, "series-map"),
+        order: index + 1,
+        constellationId: previous.constellationId || REAL_CONSTELLATIONS[(Number(goal.constellationOffset) + index) % REAL_CONSTELLATIONS.length].id,
+        constellationName: previous.constellationName || REAL_CONSTELLATIONS[(Number(goal.constellationOffset) + index) % REAL_CONSTELLATIONS.length].name,
+        nodeIds: nodes.map((node) => node.nodeId),
+        starCount: nodes.length,
+        completedStars: nodes.filter((node) => node.status === "DONE").length,
+        status: complete ? "COMPLETED" : index === 0 ? "ACTIVE" : "LOCKED",
+        completedAt: complete ? previous.completedAt || new Date().toISOString() : null,
+      };
+    });
+    goal.status = goal.completedStars >= goal.totalStarCount && goal.totalStarCount > 0 ? "COMPLETED" : "ACTIVE";
+    if (goal.status === "COMPLETED") goal.completedAt = goal.completedAt || new Date().toISOString();
+    changed = true;
+  });
+  state.taskHistory = (state.taskHistory || []).slice(0, 500);
+  return changed;
+}
+
 function migrateLegacyState(state) {
   if (!state.initialized || !state.agent) {
     return;
@@ -2265,8 +2647,8 @@ function migrateLegacyState(state) {
 
   let changed = false;
 
-  if (state.meta && Number(state.meta.version || 0) < 8) {
-    state.meta.version = 8;
+  if (state.meta && Number(state.meta.version || 0) < 9) {
+    state.meta.version = 9;
     changed = true;
   }
 
@@ -2353,6 +2735,9 @@ function migrateLegacyState(state) {
   if (migrateGoalPlanningState(state)) {
     changed = true;
   }
+  if (migratePortfolioPlanningV4(state)) {
+    changed = true;
+  }
   if (ensureGoalPortfolioState(state)) {
     changed = true;
   }
@@ -2409,7 +2794,7 @@ function resetSessionState(state) {
   state.goalPlan = null;
   state.dailyPlan = null;
   state.dailyPlanHistory = [];
-  state.goalPortfolio = { version: 1, goals: [] };
+  state.goalPortfolio = { version: 2, goals: [] };
   state.nextSuggestion = null;
   state.diary = [];
   state.skillState = {
@@ -2794,6 +3179,22 @@ async function updateGoalPriority(goalId, priority) {
     goal.priority = "INACTIVE";
   }
   state.goalPortfolio.version = 2;
+  // Rebuild generated optional actions immediately so a priority change is
+  // reflected in today's queue. User-created actions remain untouched.
+  if (state.dailyPlan) {
+    const generatedOptionalIds = new Set(
+      (state.tasks || [])
+        .filter((task) => task && !task.done && task.priorityTier === "OPTIONAL" && task.source !== "CUSTOM")
+        .map((task) => task.id)
+    );
+    if (generatedOptionalIds.size > 0) {
+      const removed = (state.tasks || []).filter((task) => generatedOptionalIds.has(task.id));
+      removed.forEach((task) => archiveUnscheduledTask(state, task, "OPTIONAL_PRIORITY_REBUILT"));
+      state.tasks = (state.tasks || []).filter((task) => !generatedOptionalIds.has(task.id));
+      state.dailyPlan.taskIds = (state.dailyPlan.taskIds || []).filter((id) => !generatedOptionalIds.has(id));
+      state.dailyPlan.optionalTaskIds = (state.dailyPlan.optionalTaskIds || []).filter((id) => !generatedOptionalIds.has(id));
+    }
+  }
   state.lastStory = `目标「${goal.title}」已调整为${goal.priority === "PRIMARY" ? "主目标" : goal.priority === "SECONDARY" ? "次目标" : "暂停自动发布"}。`;
   await ensureDailyPlan(state, { source: "GOAL_PRIORITY_UPDATED", force: true });
   saveStore();
@@ -2840,7 +3241,7 @@ function loginSession(payload) {
   };
 }
 
-async function completeTask(taskId) {
+async function completeTask(taskId, payload = {}) {
   const state = getState();
   ensureInitialized(state);
   migrateLegacyState(state);
@@ -2853,6 +3254,8 @@ async function completeTask(taskId) {
     throw new Error("该任务已经完成");
   }
 
+  const completionSummary = normalizeOptionalSummary(payload && payload.summary);
+
   const role = getRole(state.selectedRoleId);
   const currentChapterTitle = state.agent.chapter;
   ensureTaskDeadlines(state);
@@ -2861,8 +3264,10 @@ async function completeTask(taskId) {
   const rewardTask = {
     ...task,
     rewardGrowth: baseRewardGrowth,
+    completionSummary,
   };
   task.done = true;
+  task.completionSummary = completionSummary;
   task.completedAt = new Date().toISOString();
   task.overdueDays = 0;
   task.debuffActive = false;
@@ -2878,6 +3283,7 @@ async function completeTask(taskId) {
     if (!goal || !node) throw new Error("长期目标日节点不存在");
     node.status = "DONE";
     node.completedAt = task.completedAt;
+    node.completionSummary = completionSummary || null;
     refreshPortfolioGoalMetrics(goal);
     if (goal.status === "COMPLETED") {
       goal.completedAt = task.completedAt;
@@ -2947,6 +3353,7 @@ async function completeTask(taskId) {
     skillPromptText: skillResolution.promptText,
     skillEffectSummary,
     characterArc,
+    userSummary: completionSummary || null,
     permanentTitles: narrativeContext.permanentTitles,
     worldEntities: narrativeContext.worldEntities,
     seasonDigests: narrativeContext.seasonDigests,
@@ -2967,14 +3374,14 @@ async function completeTask(taskId) {
 
   createDiaryEntry(state, {
     title: `${task.type === "main" ? "主线推进" : "支线完成"}：${task.title}`,
-    body: `${story.storyText}${levelUps > 0 ? ` 角色升至 Lv.${state.stats.level}。` : ""}`,
+    body: `${story.storyText}${levelUps > 0 ? ` 角色升至 Lv.${state.stats.level}。` : ""}${completionSummary ? `\n\n今日总结：${completionSummary}` : ""}`,
     reward: rewardSummary,
   });
 
   const taskMemory = createMemoryEntry(state, {
     type: task.type === "main" ? "task_completed_main" : "task_completed_side",
     title: `${task.type === "main" ? "主线" : "支线"}完成：${task.title}`,
-    memorySummary: story.memorySummary,
+    memorySummary: completionSummary ? `${story.memorySummary} 用户总结：${completionSummary}` : story.memorySummary,
     storyText: story.storyText,
     reward: rewardSummary,
     relatedTaskId: task.id,
@@ -3081,7 +3488,7 @@ async function completeTask(taskId) {
 
   refreshGoalPlanProgress(state);
   state.nextSuggestion = task.portfolioNodeId
-    ? `「${task.goalTitle}」的一颗主线星已点亮，今日共有 ${PORTFOLIO_MAIN_TASKS_PER_DAY} 颗可完成。`
+    ? `「${task.goalTitle}」的一颗主线星已点亮，今天的核心行动已完成。`
     : task.portfolioGoalId
       ? `「${task.goalTitle}」的今日支线已完成，支线不计入星图进度。`
     : await planNextSuggestion(state.goalPlan, task, state.stats, {
@@ -3100,7 +3507,8 @@ async function completeTask(taskId) {
     storyText: chapterFinaleResult
       ? `${story.storyText}\n\n【章节大结局】\n${chapterFinaleResult.chapterFinale}`
       : story.storyText,
-    memorySummary: story.memorySummary,
+    memorySummary: completionSummary ? `${story.memorySummary} 用户总结：${completionSummary}` : story.memorySummary,
+    completionSummary,
     rewardSummary,
     chapterFinale: chapterFinaleResult,
     triggeredSkills: skillResolution.publicTriggeredSkills,
@@ -3144,6 +3552,7 @@ async function createTask(payload) {
           dailyPlanId: state.dailyPlan && state.dailyPlan.id,
           scheduledDate: planDate,
           source: "CUSTOM",
+          priorityTier: "OPTIONAL",
           difficulty: 1,
           narrativeHook: "一条新的支线补给路标出现在目标地图上。",
         },

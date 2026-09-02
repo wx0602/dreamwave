@@ -510,6 +510,9 @@ function buildDailyPlanDto(dailyPlan) {
     status: cleanText(source.status) || "ACTIVE",
     capacityMinutes: toNumber(source.capacityMinutes, 0),
     taskIds: Array.isArray(source.taskIds) ? [...source.taskIds] : [],
+    coreReleased: Boolean(source.coreReleased),
+    coreTaskId: cleanText(source.coreTaskId),
+    optionalTaskIds: Array.isArray(source.optionalTaskIds) ? [...source.optionalTaskIds] : [],
     source: cleanText(source.source),
     version: toNumber(source.version, 1),
     message: cleanText(source.message),
@@ -567,6 +570,8 @@ function buildStarMapDto(starMap) {
                 taskId: cleanText(star && star.taskId),
                 title: cleanText(star && star.title),
                 completedAt: cleanText(star && star.completedAt),
+                sourceTitle: cleanText(star && star.sourceTitle),
+                completionSummary: cleanText(star && star.completionSummary),
               }))
             : [],
           rewardToolId: cleanText(entry && entry.rewardToolId),
