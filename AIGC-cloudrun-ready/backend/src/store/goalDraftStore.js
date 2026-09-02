@@ -168,6 +168,6 @@ module.exports = {
   updateGoalDraft,
   findConfirmationReceipt,
   markGoalDraftConfirmed,
-  pruneGoalDrafts,
+  pruneGoalDrafts: pruneDrafts,
   resetDraftStore,
 };

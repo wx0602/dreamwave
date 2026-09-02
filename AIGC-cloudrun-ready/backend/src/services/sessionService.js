@@ -6,6 +6,13 @@ const { selectStoryAsset } = require("../constants/storyAssets");
 const { formatDiaryTime, getDungeonState } = require("../utils/time");
 const { clone } = require("../utils/clone");
 const { getState, saveStore, replaceState } = require("../store/sessionStore");
+const { AppError } = require("../lib/errors");
+const {
+  findConfirmationReceipt,
+  markGoalDraftConfirmed,
+} = require("../store/goalDraftStore");
+const { getDraftForConfirmation } = require("./goalDraftService");
+const { buildFallbackPlan } = require("./sourceBoundPlanningService");
 const {
   setDeepseekApiKey,
   getDeepseekApiKey,
@@ -101,6 +108,57 @@ function ensureInitialized(state) {
 
 function buildMainline(goal, role) {
   return `围绕“${goal}”展开的新主线已开启。你需要在 ${role.chapter} 中逐步完成当前阶段任务，解锁新的剧情片段。`;
+}
+
+function buildLegacyPlanFromSourceBoundDraft(draft, state) {
+  const plan = draft && draft.planDraft;
+  const profile = draft && draft.goalProfile || {};
+  const stageGoals = Array.isArray(plan && plan.stageGoals) ? plan.stageGoals : [];
+  const firstWeek = Array.isArray(plan && plan.firstWeek) ? plan.firstWeek : [];
+  const stages = stageGoals.map((stage, stageIndex) => ({
+    id: stage.stageId || `stage-${stageIndex + 1}`,
+    title: stage.title || `阶段 ${stageIndex + 1}`,
+    description: stage.description || "围绕已确认来源持续推进。",
+    progress: 0,
+    status: stageIndex === 0 ? "IN_PROGRESS" : "NOT_STARTED",
+    tasks: firstWeek
+      .filter((day) => Number(day.day) >= Number(stage.startDay || 1) && Number(day.day) <= Number(stage.endDay || profile.durationDays || 30))
+      .map((day) => ({
+        id: `planned-core-${day.day}`,
+        title: day.coreTask.title,
+        description: day.coreTask.detail,
+        detail: day.coreTask.detail,
+        difficulty: 2,
+        estimatedMinutes: day.coreTask.estimatedMinutes,
+        rewardGrowth: 14,
+        rewardResource: 14,
+        status: "TODO",
+        dueDate: day.day,
+        order: Number(day.day),
+        sourceRef: day.coreTask.sourceRef,
+        priorityTier: "CORE",
+        selectionReason: day.coreTask.selectionReason,
+      })),
+  }));
+  const fallback = {
+    id: allocateId(state, "goal-plan"),
+    longTermGoal: profile.title,
+    goalLevel: "LONG_TERM",
+    currentStageId: stages[0] && stages[0].id,
+    status: "ACTIVE",
+    stageGoals: stages,
+    clarifyingQuestions: [],
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+  return fallback.stageGoals.length >= 2 ? fallback : {
+    ...fallback,
+    stageGoals: [
+      { id: "stage-1", title: "建立基础", description: "围绕已确认来源建立起点。", progress: 0, status: "IN_PROGRESS", tasks: [] },
+      { id: "stage-2", title: "形成应用", description: "把来源内容转成可执行结果。", progress: 0, status: "NOT_STARTED", tasks: [] },
+    ],
+    currentStageId: "stage-1",
+  };
 }
 
 function normalizeEstimatedMinutes(value, fallback = 25) {
@@ -294,6 +352,14 @@ function buildPortfolioGoal(state, options = {}) {
     completedAt: null,
     nodes: [],
     constellations: [],
+    originDraftId: String(options.originDraftId || "").trim() || null,
+    sourcePreferences: options.sourcePreferences ? clone(options.sourcePreferences) : null,
+    learningSources: Array.isArray(options.learningSources) ? clone(options.learningSources) : [],
+    selectedSourceBundleId: String(options.selectedSourceBundleId || "").trim() || null,
+    planStatus: options.planStatus || "LEGACY",
+    planConfirmedAt: options.planConfirmedAt || null,
+    priority: options.priority || "INACTIVE",
+    plannedThroughDay: 0,
   };
   initializeGoalPlanning(
     goal,
@@ -2446,16 +2512,21 @@ async function getCurrentSessionState() {
 
 async function createSession(payload) {
   const state = getState();
-  const requestedRoleId = String(payload.roleId || "scholar").trim();
+  const confirmedDraft = payload && payload.confirmedDraft ? payload.confirmedDraft : null;
+  const draftProfile = confirmedDraft && confirmedDraft.goalProfile || {};
+  const requestedRoleId = String((confirmedDraft ? draftProfile.roleId : payload.roleId) || "scholar").trim();
   const role = getRoleOrThrow(requestedRoleId);
   const account = String(payload.account || "").trim();
   const password = String(payload.password || "").trim();
   const sessionApiKey = String(payload.apiKey || "").trim();
   const profile = {
-    name: String(payload.name || "林岚").trim(),
-    goal: String(payload.goal || "").trim(),
-    deadline: String(payload.deadline || "30 天后").trim(),
-    dailyTime: String(payload.dailyTime || "2 小时").trim(),
+    name: String((confirmedDraft ? draftProfile.name : payload.name) || "林岚").trim(),
+    goal: String((confirmedDraft ? draftProfile.title : payload.goal) || "").trim(),
+    deadline: String((confirmedDraft ? draftProfile.deadline : payload.deadline) || "30 天后").trim(),
+    dailyTime: String((confirmedDraft ? draftProfile.dailyTime : payload.dailyTime) || "2 小时").trim(),
+    currentLevel: String((confirmedDraft ? draftProfile.currentLevel : payload.currentLevel) || "UNSYSTEMATIC").trim(),
+    sourcePreference: String((confirmedDraft ? draftProfile.sourcePreference : payload.sourcePreference) || "ANY").trim(),
+    accessPreference: String((confirmedDraft ? draftProfile.accessPreference : payload.accessPreference) || "FREE_ONLY").trim(),
   };
 
   if (!account) {
@@ -2509,10 +2580,27 @@ async function createSession(payload) {
   state.agent.mainline = blueprint.mainlineSummary || buildMainline(profile.goal, role);
   state.agent.blueprintSource = blueprint.source;
   state.agent.activeSkillIds = [...state.skillState.unlockedSkillIds];
-  await buildGoalPlanForState(state, profile.goal, [
-    { id: "deadline", question: "距离关键节点或截止日期还有多久？", answer: profile.deadline },
-    { id: "dailyTime", question: "每天大约能稳定投入几小时？", answer: profile.dailyTime },
-  ]);
+  let approvedPlan = null;
+  if (confirmedDraft) {
+    approvedPlan = confirmedDraft.planDraft || buildFallbackPlan({
+      goalProfile: {
+        title: profile.goal,
+        durationDays: parseGoalDurationDays(profile.deadline, 30),
+        dailyBudgetMinutes: parseDailyMinutes(profile.dailyTime, 120),
+      },
+      sources: confirmedDraft.selectedSources || [],
+      selectedSourceIds: confirmedDraft.selectedSourceIds || [],
+    });
+    state.goalPlan = buildLegacyPlanFromSourceBoundDraft({
+      goalProfile: { title: profile.goal, durationDays: parseGoalDurationDays(profile.deadline, 30) },
+      planDraft: approvedPlan,
+    }, state);
+  } else {
+    await buildGoalPlanForState(state, profile.goal, [
+      { id: "deadline", question: "距离关键节点或截止日期还有多久？", answer: profile.deadline },
+      { id: "dailyTime", question: "每天大约能稳定投入几小时？", answer: profile.dailyTime },
+    ]);
+  }
   state.openingNarrative = blueprint.openingStory;
   state.lastStory = blueprint.openingStory;
   state.lastRewardSummary = "获得初始成长值 +58，资源点 +92";
@@ -2551,7 +2639,29 @@ async function createSession(payload) {
 
   // Finish all asynchronous world/plan generation before committing the
   // account. A failed initialization must not leave a login-only ghost account.
-  ensureGoalPortfolioState(state);
+  if (confirmedDraft) {
+    const confirmedGoal = buildPortfolioGoal(state, {
+      title: profile.goal,
+      durationDays: draftProfile.durationDays || parseGoalDurationDays(profile.deadline, 30),
+      plan: state.goalPlan,
+      sourceBoundPlan: approvedPlan,
+      learningSources: confirmedDraft.selectedSources || [],
+      selectedSourceBundleId: confirmedDraft.selectedBundleId,
+      sourcePreferences: {
+        currentLevel: profile.currentLevel,
+        sourcePreference: profile.sourcePreference,
+        accessPreference: profile.accessPreference,
+      },
+      originDraftId: confirmedDraft.draftId,
+      planStatus: "CONFIRMED",
+      planConfirmedAt: confirmedDraft.updatedAt || new Date().toISOString(),
+      constellationIndex: 0,
+      priority: "PRIMARY",
+    });
+    state.goalPortfolio = { version: 2, goals: [confirmedGoal] };
+  } else {
+    ensureGoalPortfolioState(state);
+  }
   await ensureDailyPlan(state, { source: "SESSION_CREATED" });
   syncAgentArtifacts(state);
 
@@ -2573,6 +2683,121 @@ async function createSession(payload) {
     characterArc: getCurrentCharacterArc(state),
     storyAsset: openingAsset,
   };
+}
+
+async function createParallelGoalFromConfirmedDraft(draft) {
+  const state = getState();
+  ensureInitialized(state);
+  migrateLegacyState(state);
+  ensureGoalPortfolioState(state);
+  const profile = draft.goalProfile || {};
+  const title = String(profile.title || "").trim();
+  if (!title) throw new AppError("INVALID_GOAL_PROFILE", "长期目标不能为空", 400);
+  if ((state.goalPortfolio.goals || []).some((goal) => goal && goal.status === "ACTIVE" && goal.title === title)) {
+    throw new AppError("DUPLICATE_GOAL", "该长期目标已经在进行中", 409);
+  }
+  const activeGoals = (state.goalPortfolio.goals || []).filter((goal) => goal && goal.status === "ACTIVE");
+  const priority = activeGoals.some((goal) => goal.priority === "PRIMARY")
+    ? activeGoals.some((goal) => goal.priority === "SECONDARY") ? "INACTIVE" : "SECONDARY"
+    : "PRIMARY";
+  const goal = buildPortfolioGoal(state, {
+    title,
+    durationDays: profile.durationDays || parseGoalDurationDays(profile.deadline, 30),
+    plan: buildLegacyPlanFromSourceBoundDraft(draft, state),
+    sourceBoundPlan: draft.planDraft,
+    learningSources: draft.selectedSources || [],
+    selectedSourceBundleId: draft.selectedBundleId,
+    sourcePreferences: {
+      currentLevel: profile.currentLevel,
+      sourcePreference: profile.sourcePreference,
+      accessPreference: profile.accessPreference,
+    },
+    originDraftId: draft.draftId,
+    planStatus: "CONFIRMED",
+    planConfirmedAt: draft.updatedAt || new Date().toISOString(),
+    constellationIndex: state.goalPortfolio.goals.length,
+    priority,
+  });
+  state.goalPortfolio.version = 2;
+  state.goalPortfolio.goals.push(goal);
+  state.transition.needsNewGoalPrompt = false;
+  state.agent.emotion = "期待";
+  state.lastStory = `长期目标「${title}」已加入并行星图。`;
+  state.lastRewardSummary = `${profile.durationDays || goal.durationDays} 天学习路线已确认`;
+  await ensureDailyPlan(state, { source: "GOAL_ADDED" });
+  syncAgentArtifacts(state);
+  saveStore();
+  return {
+    tag: "goal.created.parallel",
+    title: "长期目标已加入",
+    storyText: state.lastStory,
+    rewardSummary: state.lastRewardSummary,
+  };
+}
+
+async function confirmGoalDraft(preparedDraft, payload = {}) {
+  const draft = preparedDraft;
+  const confirmationKey = String(payload.confirmationKey || "").trim();
+  if (confirmationKey.length < 8 || confirmationKey.length > 120) {
+    throw new AppError("CONFIRMATION_KEY_INVALID", "确认请求标识无效", 400);
+  }
+  const existing = findConfirmationReceipt(draft.draftId, confirmationKey);
+  if (existing && existing.event) return existing.event;
+
+  let event;
+  if (draft.mode === "INITIAL") {
+    const registration = payload.registration || {};
+    const account = String(registration.account || "").trim();
+    const password = String(registration.password || "").trim();
+    if (!account || !password) throw new AppError("REGISTRATION_REQUIRED", "首次初始化需要账号和密码", 400);
+    event = await createSession({
+      account,
+      password,
+      apiKey: String(registration.apiKey || "").trim(),
+      confirmedDraft: draft,
+    });
+  } else {
+    event = await createParallelGoalFromConfirmedDraft(draft);
+  }
+  const state = getState();
+  const createdGoal = state.goalPortfolio && state.goalPortfolio.goals
+    ? state.goalPortfolio.goals.find((goal) => goal.originDraftId === draft.draftId)
+    : null;
+  markGoalDraftConfirmed(draft.draftId, draft.revision, {
+    confirmationKey,
+    goalId: createdGoal && createdGoal.goalId,
+    event,
+  });
+  return event;
+}
+
+async function updateGoalPriority(goalId, priority) {
+  const state = getState();
+  ensureInitialized(state);
+  migrateLegacyState(state);
+  const goal = (state.goalPortfolio.goals || []).find((entry) => entry && entry.goalId === String(goalId || ""));
+  if (!goal) throw new AppError("GOAL_NOT_FOUND", "长期目标不存在", 404);
+  const nextPriority = ["PRIMARY", "SECONDARY", "INACTIVE"].includes(priority) ? priority : "";
+  if (!nextPriority) throw new AppError("GOAL_PRIORITY_INVALID", "目标优先级无效", 400);
+  const goals = state.goalPortfolio.goals;
+  if (nextPriority === "PRIMARY") {
+    const oldPrimary = goals.find((entry) => entry.priority === "PRIMARY" && entry.goalId !== goal.goalId);
+    const oldSecondary = goals.find((entry) => entry.priority === "SECONDARY" && entry.goalId !== goal.goalId);
+    if (oldPrimary) oldPrimary.priority = oldSecondary && oldSecondary.goalId !== goal.goalId ? "INACTIVE" : "SECONDARY";
+    goal.priority = "PRIMARY";
+  } else if (nextPriority === "SECONDARY") {
+    const oldSecondary = goals.find((entry) => entry.priority === "SECONDARY" && entry.goalId !== goal.goalId);
+    if (oldSecondary) oldSecondary.priority = "INACTIVE";
+    if (!goals.some((entry) => entry.priority === "PRIMARY")) goal.priority = "PRIMARY";
+    else goal.priority = "SECONDARY";
+  } else {
+    goal.priority = "INACTIVE";
+  }
+  state.goalPortfolio.version = 2;
+  state.lastStory = `目标「${goal.title}」已调整为${goal.priority === "PRIMARY" ? "主目标" : goal.priority === "SECONDARY" ? "次目标" : "暂停自动发布"}。`;
+  await ensureDailyPlan(state, { source: "GOAL_PRIORITY_UPDATED", force: true });
+  saveStore();
+  return { tag: "goal.priority.updated", title: "目标优先级已更新", storyText: state.lastStory, rewardSummary: "" };
 }
 
 function loginSession(payload) {
@@ -2990,6 +3215,9 @@ async function createTask(payload) {
 }
 
 async function createParallelGoal(payload) {
+  if (payload && payload.confirmedDraft) {
+    return createParallelGoalFromConfirmedDraft(payload.confirmedDraft);
+  }
   const state = getState();
   ensureInitialized(state);
   migrateLegacyState(state);
@@ -4031,10 +4259,12 @@ function getCurrentDungeonProfile() {
 module.exports = {
   getCurrentSessionState,
   createSession,
+  confirmGoalDraft,
   loginSession,
   completeTask,
   createTask,
   createParallelGoal,
+  updateGoalPriority,
   updateTask,
   replanGoalTasks,
   refreshNextSuggestion,

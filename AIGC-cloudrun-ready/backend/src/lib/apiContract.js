@@ -1016,12 +1016,13 @@ function buildSuccessResponse(data, message = "ok") {
   };
 }
 
-function buildErrorResponse(message, code = 400) {
+function buildErrorResponse(message, statusCode = 400, errorCode = "REQUEST_ERROR", details = null) {
   return {
-    code,
+    code: statusCode,
+    errorCode,
     message,
     success: false,
-    data: null,
+    data: details,
   };
 }
 

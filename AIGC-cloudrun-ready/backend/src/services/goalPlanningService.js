@@ -1,4 +1,10 @@
 const { jsonCompletion, getResolvedApiKey } = require("./deepseekService");
+const {
+  generateSourceBoundPlan,
+  validateSourceBoundPlan,
+  repairSourceBoundPlan,
+  buildFallbackPlan: generateSourceBoundPlanFallback,
+} = require("./sourceBoundPlanningService");
 
 const GOAL_LEVELS = Object.freeze({
   LONG_TERM: "LONG_TERM",
@@ -938,6 +944,10 @@ module.exports = {
   generateClarifyingQuestions,
   generateGoalPlan,
   generateRollingTaskPlan,
+  generateSourceBoundPlan,
+  validateSourceBoundPlan,
+  repairSourceBoundPlan,
+  generateSourceBoundPlanFallback,
   ROLLING_TASK_PLAN_SYSTEM_PROMPT,
   replanTasks,
   generateNextSuggestion,

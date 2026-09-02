@@ -4,7 +4,14 @@ const { URL } = require("url");
 const env = require("./config/env");
 const { initializeAgentCatalog } = require("./constants/roles");
 const { json, handleCors, parseBody } = require("./lib/http");
-const { API_ROUTES, matchTaskCompletionPath, matchTaskEditPath } = require("./lib/apiRoutes");
+const {
+  API_ROUTES,
+  matchTaskCompletionPath,
+  matchTaskEditPath,
+  matchGoalDraftPath,
+  matchGoalDraftActionPath,
+  matchGoalPriorityPath,
+} = require("./lib/apiRoutes");
 const {
   buildRoleDto,
   buildAppState,
@@ -14,7 +21,17 @@ const {
   buildAgentMemory,
   buildSuccessResponse,
   buildErrorResponse,
+  buildGoalDraftDto,
 } = require("./lib/apiContract");
+const { isAppError } = require("./lib/errors");
+const { getGoalDraft, findConfirmationReceipt } = require("./store/goalDraftStore");
+const {
+  createDraftCommand,
+  getDraftForConfirmation,
+  searchSourcesCommand,
+  selectSourcesCommand,
+  generatePlanCommand,
+} = require("./services/goalDraftService");
 const { initializeRuntime } = require("./store/sessionStore");
 const {
   getCurrentSessionState,
@@ -38,14 +55,16 @@ const {
   getCurrentAgentMemories,
   listAvailableRoles,
   getCurrentDungeonProfile,
+  confirmGoalDraft,
+  updateGoalPriority,
 } = require("./services/sessionService");
 
 function respondSuccess(res, data, message) {
   json(res, 200, buildSuccessResponse(data, message));
 }
 
-function respondError(res, statusCode, message) {
-  json(res, statusCode, buildErrorResponse(message, statusCode));
+function respondError(res, statusCode, message, errorCode, details) {
+  json(res, statusCode, buildErrorResponse(message, statusCode, errorCode, details));
 }
 
 function writeHealth(res, statusCode, payload) {
@@ -91,6 +110,45 @@ function createServer() {
         return;
       }
 
+      if (req.method === "POST" && pathname === API_ROUTES.goalDrafts) {
+        const body = await parseBody(req);
+        respondSuccess(res, buildGoalDraftDto(createDraftCommand(body)), "学习目标草稿已创建");
+        return;
+      }
+
+      const goalDraftPathMatch = matchGoalDraftPath(pathname);
+      if (req.method === "GET" && goalDraftPathMatch) {
+        respondSuccess(res, buildGoalDraftDto(getGoalDraft(goalDraftPathMatch[1])), "草稿已恢复");
+        return;
+      }
+
+      const goalDraftActionMatch = req.method === "POST" && matchGoalDraftActionPath(pathname);
+      if (goalDraftActionMatch) {
+        const body = await parseBody(req);
+        const draftId = goalDraftActionMatch[1];
+        const action = goalDraftActionMatch[2];
+        let draft;
+        if (action === "source-searches") {
+          draft = await searchSourcesCommand(draftId, body);
+        } else if (action === "source-selections") {
+          draft = selectSourcesCommand(draftId, body);
+        } else if (action === "plan-generations") {
+          draft = await generatePlanCommand(draftId, body);
+        } else {
+          const receipt = findConfirmationReceipt(draftId, body.confirmationKey);
+          if (receipt && receipt.event) {
+            respondSuccess(res, buildCommandResult(receipt.event, await getCurrentSessionState()), "已恢复已确认的学习路线");
+            return;
+          }
+          const prepared = getDraftForConfirmation(draftId, body.expectedRevision);
+          const event = await confirmGoalDraft(prepared, body);
+          respondSuccess(res, buildCommandResult(event, await getCurrentSessionState()), "已确认并开始执行");
+          return;
+        }
+        respondSuccess(res, buildGoalDraftDto(draft), "草稿已更新");
+        return;
+      }
+
       if (req.method === "POST" && pathname === API_ROUTES.sessions) {
         const body = await parseBody(req);
         const event = await createSession(body);
@@ -121,6 +179,14 @@ function createServer() {
         const body = await parseBody(req);
         const event = await createParallelGoal(body);
         respondSuccess(res, buildCommandResult(event, await getCurrentSessionState()), "长期目标创建成功");
+        return;
+      }
+
+      const goalPriorityMatch = req.method === "POST" && matchGoalPriorityPath(pathname);
+      if (goalPriorityMatch) {
+        const body = await parseBody(req);
+        const event = await updateGoalPriority(goalPriorityMatch[1], body.priority);
+        respondSuccess(res, buildCommandResult(event, await getCurrentSessionState()), "目标优先级已更新");
         return;
       }
 
@@ -227,14 +293,21 @@ function createServer() {
 
       const completeMatch = req.method === "POST" && matchTaskCompletionPath(pathname);
       if (completeMatch) {
-        const event = await completeTask(completeMatch[1]);
+        const body = await parseBody(req);
+        const event = await completeTask(completeMatch[1], body);
         respondSuccess(res, buildCommandResult(event, await getCurrentSessionState()), "任务结算成功");
         return;
       }
 
       respondError(res, 404, "接口不存在");
     } catch (error) {
-      respondError(res, 400, error.message || "请求处理失败");
+      respondError(
+        res,
+        Number(error && error.statusCode) || 400,
+        error.message || "请求处理失败",
+        isAppError(error) ? error.code : "REQUEST_ERROR",
+        isAppError(error) ? error.details : null
+      );
     }
   });
 }
