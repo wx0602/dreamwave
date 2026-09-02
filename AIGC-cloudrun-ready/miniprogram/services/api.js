@@ -19,6 +19,7 @@ const ROUTES = Object.freeze({
   currentAgent: "/api/agents/current",
   currentAgentMemories: "/api/agents/current/memories",
   purchases: "/api/purchases",
+  goalDrafts: "/api/goal-drafts",
 });
 
 function normalizeError(error) {
@@ -85,7 +86,36 @@ module.exports = {
   createTask: (title) => request(ROUTES.tasks, "POST", { title }),
   createGoal: (title, durationDays) => request(ROUTES.goals, "POST", { title, durationDays }),
   updateTask: (taskId, payload) => request(`${ROUTES.tasks}/${encodeURIComponent(taskId)}/edits`, "POST", payload),
-  completeTask: (taskId) => request(`${ROUTES.tasks}/${encodeURIComponent(taskId)}/completion`, "POST"),
+ completeTask: (taskId, summary) => request(`${ROUTES.tasks}/${encodeURIComponent(taskId)}/completion`, "POST", {
+   summary: summary === undefined ? undefined : summary,
+ }),
+  createGoalDraft: (payload) => request(ROUTES.goalDrafts, "POST", payload),
+  getGoalDraft: (draftId) => request(`${ROUTES.goalDrafts}/${encodeURIComponent(draftId)}`),
+  searchGoalSources: (draftId, payload) => request(
+    `${ROUTES.goalDrafts}/${encodeURIComponent(draftId)}/source-searches`,
+    "POST",
+    payload
+  ),
+  selectGoalSources: (draftId, payload) => request(
+    `${ROUTES.goalDrafts}/${encodeURIComponent(draftId)}/source-selections`,
+    "POST",
+    payload
+  ),
+  generateGoalPlan: (draftId, payload) => request(
+    `${ROUTES.goalDrafts}/${encodeURIComponent(draftId)}/plan-generations`,
+    "POST",
+    payload
+  ),
+  confirmGoalDraft: (draftId, payload) => request(
+    `${ROUTES.goalDrafts}/${encodeURIComponent(draftId)}/confirmations`,
+    "POST",
+    payload
+  ),
+  updateGoalPriority: (goalId, priority) => request(
+    `${ROUTES.goals}/${encodeURIComponent(goalId)}/priority`,
+    "POST",
+    { priority }
+  ),
   advanceGoal: (goal) => request(ROUTES.goalsAdvance, "POST", { goal }),
   replanGoal: (reason, taskId, newGoal) => request(ROUTES.goalsReplan, "POST", { reason, taskId: taskId || null, newGoal: newGoal || null }),
   refreshNextSuggestion: (completedTaskId) => request(ROUTES.nextSuggestion, "POST", { completedTaskId: completedTaskId || null }),

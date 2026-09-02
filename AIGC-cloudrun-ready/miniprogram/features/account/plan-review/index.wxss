@@ -1,0 +1,29 @@
+.plan-page { min-height:100vh; }
+.plan-heading { padding:20rpx 4rpx 10rpx; }
+.plan-heading .page-title { margin-top:18rpx; }
+.error { margin-top:22rpx; padding:22rpx; color:#b95f6c; line-height:1.6; background:#fff2f4; border-color:#f3d2d9; }
+.source-summary { margin-top:26rpx; padding:28rpx; }
+.section-heading { font-size:30rpx; font-weight:700; color:#2f3440; }
+.source-line { display:flex; gap:16rpx; align-items:flex-start; margin-top:20rpx; }
+.source-mark { color:#6fb6ff; line-height:1.4; }
+.source-title { color:#405466; line-height:1.5; }
+.week-card { margin-top:18rpx; padding:26rpx; }
+.day-label { display:flex; align-items:center; justify-content:space-between; color:#4f9ef0; font-size:24rpx; font-weight:700; }
+.day-label text:last-child { color:#9aa6b2; font-weight:400; }
+.core-row { display:flex; gap:18rpx; margin-top:22rpx; padding:20rpx; border-radius:24rpx; background:#eef7ff; }
+.core-badge { flex:none; height:42rpx; padding:10rpx 12rpx; border-radius:12rpx; color:#fff; background:#6fb6ff; font-size:18rpx; font-weight:800; letter-spacing:1rpx; }
+.task-copy { flex:1; min-width:0; }
+.task-title { font-size:28rpx; font-weight:700; line-height:1.45; }
+.task-detail { margin-top:8rpx; color:#607180; line-height:1.55; }
+.task-meta { margin-top:10rpx; color:#4f9ef0; font-size:22rpx; }
+.optional-title { margin-top:22rpx; color:#7d91a2; font-size:23rpx; font-weight:700; }
+.optional-row { display:flex; gap:14rpx; margin-top:14rpx; padding:16rpx 4rpx 0; color:#506777; line-height:1.45; }
+.optional-mark { color:#82cdbb; }
+.milestone-card,.adjust-card { margin-top:18rpx; padding:26rpx; }
+.milestone { display:grid; grid-template-columns:110rpx 1fr; gap:8rpx 16rpx; margin-top:20rpx; color:#506777; line-height:1.5; }
+.milestone .hint { grid-column:2; }
+.adjust-card .hint { display:block; margin-top:12rpx; }
+.adjust-card textarea { margin-top:18rpx; }
+.adjust-card button { margin-top:16rpx; }
+.plan-actions { display:flex; gap:18rpx; margin-top:34rpx; padding-bottom:30rpx; }
+.plan-actions button { flex:1; min-width:0; }

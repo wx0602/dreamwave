@@ -26,6 +26,7 @@ Page({
       deadline: this.data.deadline, dailyTime: this.data.dailyTime, roleId: this.data.roleId,
     };
     getApp().globalData.registrationPayload = payload;
-    wx.navigateTo({ url: "/features/account/entering/index" });
+    getApp().globalData.goalDraft = null;
+    wx.navigateTo({ url: "/features/account/source-select/index" });
   },
 });

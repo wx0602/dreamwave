@@ -119,8 +119,12 @@ async function rankSourceBundles(candidates, context = {}, options = {}) {
         }),
       },
     ], { apiKey, temperature: 0.3, maxTokens: 1200, timeoutMs: 10000 });
+    const suppliedBundles = Array.isArray(result && result.bundles) ? result.bundles : [];
+    const hasUsableLlmBundle = suppliedBundles.some((bundle) => (
+      Array.isArray(bundle && bundle.sourceIds) && bundle.sourceIds.length > 0
+    ));
     const bundles = validateSourceBundles(result, candidates, context.preferences || {});
-    return { bundles, source: bundles === fallback ? "fallback" : "llm" };
+    return { bundles, source: hasUsableLlmBundle ? "llm" : "fallback" };
   } catch (error) {
     return { bundles: fallback, source: "fallback" };
   }

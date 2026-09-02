@@ -150,9 +150,12 @@ function createServer() {
       }
 
       if (req.method === "POST" && pathname === API_ROUTES.sessions) {
-        const body = await parseBody(req);
-        const event = await createSession(body);
-        respondSuccess(res, buildCommandResult(event, await getCurrentSessionState()), "初始化成功");
+        respondError(
+          res,
+          410,
+          "请先完成来源选择和计划确认，再开始初始化",
+          "LEGACY_CONFIRMATION_REQUIRED"
+        );
         return;
       }
 
@@ -176,9 +179,12 @@ function createServer() {
       }
 
       if (req.method === "POST" && pathname === API_ROUTES.goals) {
-        const body = await parseBody(req);
-        const event = await createParallelGoal(body);
-        respondSuccess(res, buildCommandResult(event, await getCurrentSessionState()), "长期目标创建成功");
+        respondError(
+          res,
+          410,
+          "请先完成来源选择和计划确认，再新增长期目标",
+          "LEGACY_CONFIRMATION_REQUIRED"
+        );
         return;
       }
 
