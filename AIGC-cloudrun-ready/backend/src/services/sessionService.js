@@ -44,6 +44,7 @@ const {
   generateNextSuggestion: planNextSuggestion,
 } = require("./goalPlanningService");
 const {
+  buildPlanningBlueprint,
   initializeGoalPlanning,
   ensureGoalPlanning,
   planRollingHorizon,
@@ -2609,6 +2610,13 @@ function migratePortfolioPlanningV4(state) {
     goal.completedStars = goal.nodes.filter((node) => node.status === "DONE").length;
     goal.completedDays = 0;
     goal.plannedThroughDay = durationDays;
+    if (!goal.planningBlueprint) {
+      goal.planningBlueprint = buildPlanningBlueprint({
+        goalTitle: goal.title,
+        durationDays,
+        plan: state.goalPlan,
+      });
+    }
     goal.migratedToPlanningV4At = goal.migratedToPlanningV4At || new Date().toISOString();
     goal.description = `每天完成 1 个核心任务，${goal.durationDays} 天按来源逐步推进。`;
     goal.planStatus = goal.planStatus || "LEGACY_MIGRATED";
@@ -3650,6 +3658,10 @@ async function createParallelGoal(payload) {
   if ((state.goalPortfolio.goals || []).some((goal) => goal && goal.status === "ACTIVE" && goal.title === title)) {
     throw new Error("该长期目标已经在进行中");
   }
+  const activeGoals = (state.goalPortfolio.goals || []).filter((goal) => goal && goal.status === "ACTIVE");
+  const priority = activeGoals.some((goal) => goal.priority === "PRIMARY")
+    ? activeGoals.some((goal) => goal.priority === "SECONDARY") ? "INACTIVE" : "SECONDARY"
+    : "PRIMARY";
 
   const rawPlan = await generateGoalPlan(title, [
     { id: "deadline", question: "计划持续多久？", answer: `${durationDays} 天` },
@@ -3672,21 +3684,10 @@ async function createParallelGoal(payload) {
     durationDays,
     plan: rawPlan,
     constellationIndex: state.goalPortfolio.goals.length,
+    priority,
   });
   state.goalPortfolio.goals.push(goal);
-
-  const planDate = getPlanDate(new Date(), state.profile && state.profile.timeZone || DEFAULT_TIME_ZONE);
-  if (state.dailyPlan && state.dailyPlan.planDate === planDate) {
-    const tasks = releasePortfolioGoalTasks(state, goal, planDate, state.dailyPlan.id);
-    if (tasks.length > 0) {
-      state.tasks.push(...tasks);
-      state.dailyPlan.taskIds.push(...tasks.map((task) => task.id));
-      state.dailyPlan.version = Number(state.dailyPlan.version || 1) + 1;
-      updateDailyPlanMetrics(state);
-    }
-  } else {
-    await ensurePortfolioDailyPlan(state, { source: "GOAL_ADDED" });
-  }
+  await ensurePortfolioDailyPlan(state, { source: "GOAL_ADDED" });
   state.transition.needsNewGoalPrompt = false;
   state.agent.emotion = "期待";
   state.lastStory = `长期目标「${title}」已加入并行星图。`;

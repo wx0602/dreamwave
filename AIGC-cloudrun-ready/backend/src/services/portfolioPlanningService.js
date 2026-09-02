@@ -102,7 +102,7 @@ function findContext(goal, day) {
 function allocateMinutes(dailyBudgetMinutes) {
   const budget = clamp(dailyBudgetMinutes, 25, 480);
   const optionalEach = Math.max(5, Math.floor(budget * 0.2));
-  const coreBudget = Math.max(5, Math.min(Math.floor(budget * 0.7), budget - optionalEach));
+  const coreBudget = Math.max(5, Math.min(Math.floor(budget * 0.6), budget - optionalEach * OPTIONAL_TASKS_PER_DAY));
   return {
     optionalEach,
     core: coreBudget,
@@ -356,8 +356,11 @@ function buildSideTasks(goal, day) {
   const aiDay = goal.planningBlueprint && Array.isArray(goal.planningBlueprint.rollingDays)
     ? goal.planningBlueprint.rollingDays.find((entry) => Number(entry.day) === Number(day))
     : null;
-  if (aiDay && Array.isArray(aiDay.sideTasks) && aiDay.sideTasks.length > 0) {
-    return aiDay.sideTasks.slice(0, OPTIONAL_TASKS_PER_DAY).map((task, index) => ({
+  const optionalTasks = aiDay && Array.isArray(aiDay.optionalTasks)
+    ? aiDay.optionalTasks
+    : aiDay && Array.isArray(aiDay.sideTasks) ? aiDay.sideTasks : [];
+  if (optionalTasks.length > 0) {
+    return optionalTasks.slice(0, OPTIONAL_TASKS_PER_DAY).map((task, index) => ({
       title: `第 ${day} 天：${actionableTitle(task.title, `辅助任务 ${index + 1}`)}`,
       detail: text(task.detail),
       estimatedMinutes: clamp(task.estimatedMinutes, 5, 30),

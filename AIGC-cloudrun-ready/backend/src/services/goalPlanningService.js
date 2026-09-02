@@ -750,12 +750,8 @@ const ROLLING_TASK_PLAN_SYSTEM_PROMPT = `你是“织梦学旅”的任务规划
   "days": [
     {
       "day": 1,
-      "mainTasks": [
-        {"title":"字符串","detail":"字符串","estimatedMinutes":25},
-        {"title":"字符串","detail":"字符串","estimatedMinutes":25},
-        {"title":"字符串","detail":"字符串","estimatedMinutes":25}
-      ],
-      "sideTasks": [
+      "coreTask": {"title":"字符串","detail":"字符串","estimatedMinutes":25},
+      "optionalTasks": [
         {"title":"字符串","detail":"字符串","estimatedMinutes":10},
         {"title":"字符串","detail":"字符串","estimatedMinutes":10}
       ]
@@ -768,30 +764,29 @@ const ROLLING_TASK_PLAN_SYSTEM_PROMPT = `你是“织梦学旅”的任务规划
 2. 判断用户目前处于什么阶段，今天最值得推进什么；若信息不足，安排一个小而具体的起步动作，不虚构用户的水平、教材、课程或已有成果。
 3. 结合 recentExecution 避免连续重复，并让相邻日期存在自然衔接。
 
-主任务规则：
-1. 每天恰好生成 3 个 mainTasks，三项都必须直接推进 goal，并分别覆盖当天最有价值的不同能力、知识模块或执行步骤。
-2. 不要把某个目标误解成固定三件事。以备考六级为例，需要根据阶段在词汇、听力、阅读、写作、翻译、真题训练和具体错题订正之间合理轮换；该例子只说明“先识别领域模块再组合”，不能套用到其他目标。
-3. title 必须写成“明确动作＋明确数量或范围＋具体对象或材料”，让用户不看解释也知道现在要做什么。例如：“背诵 100 个六级核心词汇”“精听 1 篇六级长对话真题”“完成 1 组六级仔细阅读并核对定位句”。
-4. 禁止只写“学习……”“了解……”“熟悉……”“梳理……”“巩固……”“推进……”“复盘今天内容”等空泛标题。确实需要整理或订正时，必须写清对象、数量和动作，例如“订正昨天阅读中的 5 道错题并重做”。
-5. 不要把三项都写成看资料、列计划、整理笔记或回顾内容；至少要有能实际练习、制作、解决或应用目标内容的任务。
+核心任务规则：
+1. 每天恰好生成 1 个 coreTask，直接推进 goal，并覆盖当天最有价值的一个能力、知识模块或执行步骤。
+2. 不要把某个目标误解成固定动作。以备考六级为例，需要根据阶段在词汇、听力、阅读、写作、翻译、真题训练和具体错题订正之间合理轮换；该例子只说明“先识别领域模块再组合”，不能套用到其他目标。
+3. title 必须写成“明确动作＋明确数量或范围＋具体对象或材料”，让用户不看解释也知道现在要做什么。
+4. 禁止只写“学习……”“了解……”“熟悉……”“梳理……”“巩固……”“推进……”“复盘今天内容”等空泛标题。确实需要整理或订正时，必须写清对象、数量和动作。
 
-趣味任务规则：
-1. 每天恰好生成 2 个 sideTasks。它们必须与 goal 有真实关联，但体验应当轻松、有趣、低压力，是换一种方式接触或应用目标内容，而不是把 mainTasks 缩短、改名后再写一遍。
+可选任务规则：
+1. 每天最多生成 2 个 optionalTasks。它们必须与 goal 有真实关联，但体验应当轻松、有趣、低压力，是换一种方式接触或应用目标内容，而不是把 coreTask 缩短、改名后再写一遍。
 2. 优先从真实场景、影视音乐、模仿挑战、小游戏、观察记录、创意尝试、轻量探索或社交互动中设计；根据目标选择合适形式，不要生搬硬套娱乐元素。
 3. 例如备考六级可以“看 1 集美剧并记下 5 句喜欢的表达”；练习口语可以“给 30 秒电影片段配音”或“模仿一段角色台词并录音”。这些只是风格示例，实际任务必须贴合用户的目标并避免重复。
-4. 趣味任务不能是高强度刷题、正式考试、长篇写作、整理错题本或另一项主要训练，也不要用“轻松完成”“随便看看”等敷衍描述。
+4. 可选任务不能是高强度刷题、正式考试、长篇写作、整理错题本或另一项主要训练，也不要用“轻松完成”“随便看看”等敷衍描述。
 5. estimatedMinutes 必须符合真实耗时：完整看一集剧应按实际片长估算；如果当天时间不够，就改成看一个片段，不能把一集剧虚标成 10 分钟。
 
 文案与时间规则：
-1. 严格生成 dayCount 天，day 从 startDay 开始连续递增；每天只能有 3 个 mainTasks 和 2 个 sideTasks。
+1. 严格生成 dayCount 天，day 从 startDay 开始连续递增；每天必须有 1 个 coreTask，optionalTasks 最多 2 个。
 2. 每个任务对象只能包含 title、detail、estimatedMinutes。detail 最多两句话，只补充开始执行所必需的方法、范围或材料，不重复标题，不写评价标准和口号。
 3. 文案中禁止出现“长期目标”“里程碑”“完成标志”“学习输入”“练习执行”“输出验证”“主线”“支线”“围绕……”“第几轮”等系统术语或套话。
 4. title 中不要写“第几天”，系统会自动添加；不要写奖励、剧情、星星、打卡口号或教学解释。
-5. 同一天的五项任务不能同义重复；连续多天不能只替换数字或材料名称。任务应按知识依赖、训练顺序、项目流程或用户最近表现逐步推进。
-6. 五项任务的 estimatedMinutes 总和不得超过 dailyMinutes。时间不足时缩小数量、篇幅或材料范围，仍要保持任务具体可做。
+5. 同一天的任务不能同义重复；连续多天不能只替换数字或材料名称。任务应按知识依赖、训练顺序、项目流程或用户最近表现逐步推进。
+6. 每日任务的 estimatedMinutes 总和不得超过 dailyMinutes。时间不足时缩小数量、篇幅或材料范围，仍要保持任务具体可做。
 7. 不承诺分数、正确率、掌握程度或结果提升，只描述用户能亲自执行的行为。
 
-输出前静默检查：天数是否正确；每天是否正好 3＋2；五项是否具体且不重复；三个 mainTasks 是否覆盖不同重点；两个 sideTasks 是否真的轻松有趣；总时长是否超限；是否出现系统套话。任何一项不满足都先重写，再输出 JSON。`;
+输出前静默检查：天数是否正确；每天是否正好 1 个 coreTask；optionalTasks 是否不超过 2 个；任务是否具体且不重复；可选任务是否真的轻松有趣；总时长是否超限；是否出现系统套话。任何一项不满足都先重写，再输出 JSON。`;
 
 function normalizeRollingTask(rawTask) {
   const title = cleanText(rawTask && rawTask.title);
@@ -808,12 +803,18 @@ function normalizeRollingTask(rawTask) {
 function normalizeRollingTaskPlan(raw, startDay, dayCount, dailyMinutes) {
   const days = raw && Array.isArray(raw.days) ? raw.days : [];
   const normalized = days.slice(0, dayCount).map((entry, index) => {
-    const mainTasks = (Array.isArray(entry && entry.mainTasks) ? entry.mainTasks : []).map(normalizeRollingTask).filter(Boolean);
-    const sideTasks = (Array.isArray(entry && entry.sideTasks) ? entry.sideTasks : []).map(normalizeRollingTask).filter(Boolean);
-    if (mainTasks.length !== 3 || sideTasks.length !== 2) return null;
-    const totalMinutes = [...mainTasks, ...sideTasks].reduce((sum, task) => sum + task.estimatedMinutes, 0);
+    const rawCore = entry && entry.coreTask
+      ? entry.coreTask
+      : Array.isArray(entry && entry.mainTasks) ? entry.mainTasks[0] : null;
+    const coreTask = normalizeRollingTask(rawCore);
+    const rawOptional = Array.isArray(entry && entry.optionalTasks)
+      ? entry.optionalTasks
+      : Array.isArray(entry && entry.sideTasks) ? entry.sideTasks : [];
+    const optionalTasks = rawOptional.map(normalizeRollingTask).filter(Boolean).slice(0, 2);
+    if (!coreTask) return null;
+    const totalMinutes = [coreTask, ...optionalTasks].reduce((sum, task) => sum + task.estimatedMinutes, 0);
     if (totalMinutes > dailyMinutes) return null;
-    return { day: startDay + index, mainTasks, sideTasks };
+    return { day: startDay + index, coreTask, optionalTasks };
   }).filter(Boolean);
   return normalized.length === dayCount ? { days: normalized } : null;
 }

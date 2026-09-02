@@ -17,7 +17,7 @@ const {
 const { getState, saveStore } = require("../src/store/sessionStore");
 
 function pendingLongTermTasks(state, goalId) {
-  return state.tasks.filter((task) => task.type === "main" && !task.done && task.portfolioGoalId === goalId);
+  return state.tasks.filter((task) => task.priorityTier === "CORE" && !task.done && task.portfolioGoalId === goalId);
 }
 
 function forceNextPlanningDay() {
@@ -47,9 +47,9 @@ async function run() {
     const goal = state.goalPortfolio.goals[0];
     assert(state.dailyPlan, "首次进入时应生成今日计划");
     assert.strictEqual(goal.durationDays, 7);
-    assert.strictEqual(goal.nodes.length, 21);
-    assert.strictEqual(pendingLongTermTasks(state, goal.goalId).length, 3, "每个目标当天应释放三个主线星点");
-    assert.strictEqual(state.tasks.filter((task) => task.type === "side" && task.portfolioGoalId === goal.goalId).length, 2, "每个目标当天应生成两个支线");
+    assert.strictEqual(goal.nodes.length, 7);
+    assert.strictEqual(pendingLongTermTasks(state, goal.goalId).length, 1, "当天应只释放一个核心星点");
+    assert(state.tasks.filter((task) => task.priorityTier === "OPTIONAL").length <= 2, "全局可选任务不得超过两个");
 
     const firstPlanId = state.dailyPlan.id;
     const firstTaskId = pendingLongTermTasks(state, goal.goalId)[0].id;
@@ -57,7 +57,7 @@ async function run() {
     assert.strictEqual(state.dailyPlan.id, firstPlanId, "同一自然日不得重建每日计划");
     assert.strictEqual(pendingLongTermTasks(state, goal.goalId)[0].id, firstTaskId, "同日刷新必须幂等");
 
-    for (const task of pendingLongTermTasks(state, goal.goalId)) await completeTask(task.id);
+    for (const task of pendingLongTermTasks(state, goal.goalId)) await completeTask(task.id, { summary: "完成今日核心动作" });
     state = await getCurrentSessionState();
     assert.strictEqual(state.goalPortfolio.goals[0].completedDays, 1);
     assert.strictEqual(pendingLongTermTasks(state, goal.goalId).length, 0, "完成后必须等到明天");
@@ -65,12 +65,13 @@ async function run() {
 
     await createTask("整理今天的书桌");
     state = await getCurrentSessionState();
-    assert(state.tasks.some((task) => task.type === "side" && !task.done), "仍可添加临时支线任务");
+    assert(state.tasks.some((task) => task.source === "CUSTOM" && task.priorityTier === "OPTIONAL" && !task.done), "仍可添加临时可选任务");
+    assert(state.tasks.filter((task) => task.priorityTier === "OPTIONAL" && !task.done).length <= 2, "添加临时任务后可选任务仍不得超过两个");
     assert.strictEqual(pendingLongTermTasks(state, goal.goalId).length, 0, "添加支线不得偷偷补发长期任务");
 
     forceNextPlanningDay();
     state = await getCurrentSessionState();
-    assert.strictEqual(pendingLongTermTasks(state, goal.goalId).length, 3, "到第二天释放下一组三个主线");
+    assert.strictEqual(pendingLongTermTasks(state, goal.goalId).length, 1, "到第二天释放下一个核心任务");
     assert.strictEqual(
       state.goalPortfolio.goals[0].nodes.find((node) => node.status === "AVAILABLE").day,
       2
