@@ -5,11 +5,14 @@
 .agent-label { color: #8a9aa8; font-size: 22rpx; }
 .agent-name { margin-top: 4rpx; font-size: 36rpx; font-weight: 700; }
 .chapter { margin-top: 6rpx; color: #4f9ef0; }
-.story,.world { margin-top: 24rpx; padding: 34rpx; }
+.story,.world,.source-card,.core-card { margin-top: 24rpx; padding: 34rpx; }
 .section-heading { font-size: 31rpx; font-weight: 700; }
 .story-body { margin-top: 18rpx; color: #607180; line-height: 1.85; white-space: pre-wrap; }
 .info { display: grid; grid-template-columns: 92rpx 1fr; gap: 18rpx; margin-top: 20rpx; color: #607180; line-height: 1.6; }
 .info text:first-child { color: #4f9ef0; font-weight: 700; }
+.source-line { display:flex; gap:18rpx; align-items:flex-start; margin-top:20rpx; }
+.source-mark { color:#e2b65b; }
+.source-title { font-size:28rpx; font-weight:700; }
 .task-line { display: flex; gap: 18rpx; margin-top: 16rpx; padding: 24rpx 28rpx; border-radius: 24rpx; background: rgba(255,255,255,.9); }
 .task-dot { color: #6fb6ff; }
 .enter { margin-top: 42rpx; }

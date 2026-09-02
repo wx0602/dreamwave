@@ -23,9 +23,9 @@ function addDays(dateText, offset) {
 Page({
   data: {
     loading: true, state: null, goals: [], selectedGoalId: "", activeGoal: null, todayTasks: [],
-    todayMainDone: 0, todaySideDone: 0, todayDone: 0, rhythmDays: [],
+    todayMainDone: 0, todaySideDone: 0, rhythmDays: [],
     currentMapName: "尚未开始", currentMapProgress: 0, currentMapOrder: 0, mapCount: 0,
-    planningScore: 0, planningStatusLabel: "待检查", currentPhase: null, currentMilestone: null, horizonLabel: "",
+    planningStatusLabel: "待检查", currentPhase: null, currentMilestone: null, horizonLabel: "",
     editModal: false, editTask: null, editTitle: "", editDetail: "", editMinutes: "25",
     previewModal: false, previewItems: [], story: null,
   },
@@ -93,10 +93,10 @@ Page({
     const planningQuality = activeGoal && activeGoal.planningQuality || {};
     this.setData({
       state, goals, selectedGoalId: activeGoal ? activeGoal.goalId : "", activeGoal, todayTasks,
-      todayMainDone, todaySideDone, todayDone: todayMainDone + todaySideDone, rhythmDays: this.buildRhythm(activeGoal, todayTasks),
+      todayMainDone, todaySideDone, rhythmDays: this.buildRhythm(activeGoal, todayTasks),
       currentMapName: currentMap ? currentMap.constellationName : "尚未开始", currentMapOrder: currentMap ? currentMap.order : 0,
       currentMapProgress: currentMap && currentMap.starCount ? Math.round(Number(currentMap.completedStars || 0) * 100 / Number(currentMap.starCount)) : 0,
-      mapCount: maps.length, planningScore: Number(planningQuality.score || 0),
+      mapCount: maps.length,
       planningStatusLabel: planningQuality.status === "PASSED" ? "已检查" : "待调整", currentPhase, currentMilestone,
       horizonLabel: planningQuality.horizonStartDay ? "D" + planningQuality.horizonStartDay + "—D" + planningQuality.horizonEndDay : "尚未生成",
     });

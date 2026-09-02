@@ -14,6 +14,7 @@ Page({
   data: {
     loading: true,
     generating: false,
+    confirming: false,
     error: "",
     draft: null,
     sources: [],
@@ -90,18 +91,40 @@ Page({
 
   backToSources() { wx.navigateBack(); },
 
-  confirmPlan() {
+  async confirmPlan() {
     const draft = this.data.draft;
-    if (!draft || draft.status !== "PLAN_READY" || !draft.planDraft) {
+    if (!draft || draft.status !== "PLAN_READY" || !draft.planDraft || this.data.confirming) {
       wx.showToast({ title: "计划还没有准备好", icon: "none" });
       return;
     }
     const app = getApp();
+    const confirmationKey = makeConfirmationKey();
+    if (draft.mode === "PARALLEL") {
+      this.setData({ confirming: true, error: "" });
+      try {
+        const result = await api.confirmGoalDraft(draft.draftId, {
+          draftId: draft.draftId,
+          expectedRevision: draft.revision,
+          confirmationKey,
+          mode: "PARALLEL",
+        });
+        app.globalData.state = result.state;
+        app.globalData.goalDraft = null;
+        app.globalData.goalSetupPayload = null;
+        app.globalData.confirmationPayload = null;
+        wx.redirectTo({ url: "/features/adventure/goal-map/index" });
+      } catch (error) {
+        this.setData({ error: error.message || "确认失败" });
+      } finally {
+        this.setData({ confirming: false });
+      }
+      return;
+    }
     const registration = app.globalData.registrationPayload || {};
     app.globalData.confirmationPayload = {
       draftId: draft.draftId,
       expectedRevision: draft.revision,
-      confirmationKey: makeConfirmationKey(),
+      confirmationKey,
       mode: draft.mode,
       registration: { account: registration.account || "", password: registration.password || "" },
     };

@@ -5,10 +5,10 @@ const { eventToStory } = require("../../../utils/ui");
 const STAGES = ["正在回收任务线索", "正在计算成长奖励", "正在续写角色记忆", "正在生成下一步建议"];
 
 Page({
-  data: { progress: 8, stage: STAGES[0], error: "", story: null, summary: "", submitting: false },
+  data: { progress: 8, stage: STAGES[0], error: "", story: null, summary: "", status: "INPUT", storyExpanded: false },
   onLoad() {
     this.task = getApp().globalData.completionTask;
-    if (!this.task) this.setData({ error: "任务信息缺失，无法结算" });
+    if (!this.task) this.setData({ error: "任务信息缺失，无法结算", status: "INPUT" });
   },
   onUnload() { this.stop(); },
   start() {
@@ -29,10 +29,10 @@ Page({
     return summary;
   },
   async complete() {
-    if (!this.task || this.data.submitting || this.data.story) return;
+    if (!this.task || this.data.status === "SUBMITTING" || this.data.status === "RESULT") return;
     const summary = this.validateSummary();
     if (summary === null) return;
-    this.setData({ progress: 8, stage: STAGES[0], error: "", story: null, submitting: true });
+    this.setData({ progress: 8, stage: STAGES[0], error: "", story: null, status: "SUBMITTING", storyExpanded: false });
     this.start();
     try {
       const result = await api.completeTask(this.task.taskId, summary);
@@ -40,11 +40,12 @@ Page({
       getApp().globalData.state = result.state;
       storage.set(storage.KEYS.companionEvent, { type: "task_complete", title: this.task.title, resources: this.task.rewardResource || 0 });
       const story = eventToStory(result.event, "任务完成") || { title: "任务完成", body: "已完成「" + this.task.title + "」", meta: "成长 +" + (this.task.rewardGrowth || 0) + " · 资源 +" + (this.task.rewardResource || 0) };
-      this.setData({ progress: 100, stage: "结算完成", story, submitting: false });
+      this.setData({ progress: 100, stage: "结算完成", story, status: "RESULT", storyExpanded: false });
     } catch (error) {
       this.stop();
-      this.setData({ error: error.message || "任务结算失败", stage: "结算中断", submitting: false });
+      this.setData({ error: error.message || "任务结算失败", stage: "结算中断", status: "INPUT" });
     }
   },
+  toggleStory() { this.setData({ storyExpanded: !this.data.storyExpanded }); },
   home() { wx.switchTab({ url: "/pages/home/index" }); },
 });

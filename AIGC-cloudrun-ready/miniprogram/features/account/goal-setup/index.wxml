@@ -1,6 +1,6 @@
 <view class="goal-setup-page watercolor-page">
   <view class="page-pad">
-    <view class="setup-heading"><view class="tag">NEW CONSTELLATION</view><view class="page-title">开启一条并行路线</view><view class="page-subtitle">先告诉 Agent 你想走到哪里，它会搜索资料并把选择权交还给你。</view></view>
+    <view class="setup-heading"><view class="tag">并行目标</view><view class="page-title">开启一条并行路线</view><view class="page-subtitle">先告诉 Agent 你想走到哪里，它会搜索资料并把选择权交还给你。</view></view>
     <view class="setup-card card">
       <view class="field"><text class="field-label">长期目标</text><textarea class="field-control textarea" data-key="title" value="{{title}}" placeholder="例如：30 天完成一套数据分析作品集" bindinput="onInput"></textarea><text class="error" wx:if="{{errors.title}}">{{errors.title}}</text></view>
       <view class="picker-row"><view class="picker-cell"><text class="field-label">持续多久</text><input class="field-control" type="number" data-key="days" value="{{days}}" bindinput="onInput"/><text class="error" wx:if="{{errors.days}}">{{errors.days}}</text></view><view class="picker-cell"><text class="field-label">每日可投入</text><picker range="{{timeOptions}}" bindchange="timeChange"><view class="picker-value">{{dailyTime}}⌄</view></picker></view></view>

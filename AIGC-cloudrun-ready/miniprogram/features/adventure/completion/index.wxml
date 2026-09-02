@@ -1,5 +1,5 @@
 <view class="completion-page watercolor-page">
-  <view class="completion-panel glass-card" wx:if="{{!story && !submitting}}">
+  <view class="completion-panel glass-card" wx:if="{{status==='INPUT'}}">
     <view class="completion-symbol">✦</view>
     <view class="page-title completion-title">完成「{{task.title}}」</view>
     <view class="page-subtitle">留下一句今天的线索吗？这会帮助 Agent 记住你的真实进展。</view>
@@ -8,8 +8,8 @@
     <view class="summary-actions"><button class="secondary-button small-button" bindtap="complete">跳过总结并结算</button><button class="primary-button small-button" bindtap="complete">写下并结算</button></view>
     <view class="error" wx:if="{{error}}">{{error}}</view>
   </view>
-  <view class="completion-panel glass-card" wx:elif="{{!story}}">
+  <view class="completion-panel glass-card" wx:elif="{{status==='SUBMITTING'}}">
     <view class="loading-orb"></view><view class="page-title completion-title">正在完成任务</view><view class="loading-stage">{{stage}}</view><view class="progress-row"><view class="progress-track"><view class="progress-fill" style="width:{{progress}}%"></view></view><text>{{progress}}%</text></view><view class="error" wx:if="{{error}}">{{error}}</view><view class="error-actions" wx:if="{{error}}"><button class="primary-button small-button" bindtap="complete">重试</button><button class="secondary-button small-button" bindtap="home">返回主页</button></view>
   </view>
-  <view class="completion-panel story-panel glass-card" wx:else><image class="story-image" wx:if="{{story.asset}}" src="{{story.asset}}" mode="aspectFit"/><view class="story-label" wx:if="{{story.assetLabel}}">{{story.assetLabel}}</view><view class="page-title">{{story.title}}</view><view class="story-body">{{story.body}}</view><view class="reward" wx:if="{{story.meta}}"><view>奖励与下一步建议</view><view>{{story.meta}}</view></view><button class="primary-button" bindtap="home">返回主页</button></view>
+  <view class="completion-panel story-panel glass-card" wx:else><view class="completion-symbol">✓</view><view class="page-title">{{story.title}}</view><view class="reward" wx:if="{{story.meta}}"><view>奖励与下一步建议</view><view>{{story.meta}}</view></view><view class="story-toggle" bindtap="toggleStory">{{storyExpanded?'收起剧情':'查看剧情'}}　⌄</view><block wx:if="{{storyExpanded}}"><image class="story-image" wx:if="{{story.asset}}" src="{{story.asset}}" mode="aspectFit"/><view class="story-label" wx:if="{{story.assetLabel}}">{{story.assetLabel}}</view><view class="story-body">{{story.body}}</view></block><button class="primary-button" bindtap="home">返回主页</button></view>
 </view>

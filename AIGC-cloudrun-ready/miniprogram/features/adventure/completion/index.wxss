@@ -12,3 +12,4 @@
 .error-actions button { flex:1; }
 .story-body { margin:30rpx 0; color:#607180; text-align:left; line-height:1.85; white-space:pre-wrap; }
 .reward { margin:0 0 32rpx; padding:24rpx; border-radius:24rpx; color:#4f9ef0; background:#eef7ff; line-height:1.7; }
+.story-toggle { margin: 12rpx 0 30rpx; color:#6c91b4; font-size:24rpx; }

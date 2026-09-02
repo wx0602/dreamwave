@@ -1,7 +1,7 @@
 <view class="workbench-page watercolor-page">
   <view class="page-pad">
     <view class="workbench-header">
-      <view><view class="tag">GOAL WORKBENCH</view><view class="page-title">目标工作台</view><view class="page-subtitle">查看每条路线的来源与节奏，今天只发布一项核心行动。</view></view>
+      <view><view class="tag">目标管理</view><view class="page-title">目标工作台</view><view class="page-subtitle">查看每条路线的来源与节奏，今天只发布一项核心行动。</view></view>
       <button class="add-goal-button" bindtap="openGoal">＋</button>
     </view>
 
@@ -24,11 +24,11 @@
     <block wx:else>
       <view class="overview-card card">
         <view class="overview-head"><view><view class="eyebrow">当前系列 · {{activeGoal.priorityLabel}}</view><view class="overview-title">{{activeGoal.title}}</view></view><button class="map-link" bindtap="openStarMap">查看星图 ›</button></view>
-        <view class="metric-row"><view class="metric"><text>{{todayDone}}/3</text><view>今日行动</view></view><view class="metric"><text>{{activeGoal.completedStars}}/{{activeGoal.totalStarCount}}</text><view>系列星数</view></view><view class="metric"><text>{{activeGoal.mapDone}}/{{mapCount}}</text><view>收集星图</view></view></view>
+        <view class="metric-row"><view class="metric"><text>{{todayMainDone}}/1</text><view>今日核心</view></view><view class="metric"><text>{{activeGoal.completedStars}}/{{activeGoal.totalStarCount}}</text><view>系列星数</view></view><view class="metric"><text>{{activeGoal.mapDone}}/{{mapCount}}</text><view>收集星图</view></view></view>
         <view class="current-map"><view class="map-mark">✦</view><view class="map-copy"><view>第 {{currentMapOrder}} 图 · {{currentMapName}}</view><text>当前星图已点亮 {{currentMapProgress}}%</text></view><view class="map-percent">{{currentMapProgress}}%</view></view>
       </view>
 
-      <view class="planning-card card"><view class="planning-head"><view class="section-title">近期计划</view><view class="quality-score {{planningScore>=85?'passed':''}}">{{planningScore}}<text>分</text></view></view><view class="quality-status">{{horizonLabel}} · {{planningStatusLabel}}</view><view class="plan-level" wx:if="{{currentPhase}}"><text>阶段</text><view>{{currentPhase.title}}</view><view class="level-days">D{{currentPhase.startDay}}—D{{currentPhase.endDay}}</view></view><view class="plan-level milestone" wx:if="{{currentMilestone}}"><text>本周</text><view>{{currentMilestone.focus}}</view></view></view>
+      <view class="planning-card card"><view class="planning-head"><view class="section-title">近期计划</view><view class="plan-range">{{horizonLabel}}</view></view><view class="quality-status">{{planningStatusLabel}} · 已围绕确认来源生成</view><view class="plan-level" wx:if="{{currentPhase}}"><text>阶段</text><view>{{currentPhase.title}}</view><view class="level-days">D{{currentPhase.startDay}}—D{{currentPhase.endDay}}</view></view><view class="plan-level milestone" wx:if="{{currentMilestone}}"><text>本周</text><view>{{currentMilestone.focus}}</view></view></view>
 
       <view class="section-bar"><view class="section-title">今天</view><text>核心 {{todayMainDone}}/1 · 可选 {{todaySideDone}}/2</text></view>
       <view class="today-empty card" wx:if="{{!todayTasks.length}}">今天的任务尚未释放，刷新或等待新一天开始。</view>

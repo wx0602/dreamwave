@@ -1,7 +1,7 @@
 <view class="source-page watercolor-page">
   <view class="page-pad">
     <view class="source-heading">
-      <view class="tag">SOURCE SCOUT</view>
+      <view class="tag">来源选择</view>
       <view class="page-title">先选学习来源</view>
       <view class="page-subtitle">Agent 已替你搜集可访问的资料。你只需要选一条最愿意跟随的路线，后续计划会紧贴它展开。</view>
     </view>

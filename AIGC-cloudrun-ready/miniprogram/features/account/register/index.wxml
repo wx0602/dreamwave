@@ -1,7 +1,7 @@
 <view class="register-page">
   <view class="register-header">
     <view>
-      <view class="eyebrow">CREATE YOUR STORY</view>
+      <view class="eyebrow">开始学习</view>
       <view class="page-title">初始化角色与目标</view>
       <view class="page-subtitle">你的现实计划，将成为下一段冒险主线。</view>
     </view>

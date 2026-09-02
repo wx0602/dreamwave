@@ -1,7 +1,7 @@
 <view class="plan-page watercolor-page">
   <view class="page-pad">
     <view class="plan-heading">
-      <view class="tag">PLAN REVIEW</view>
+      <view class="tag">计划确认</view>
       <view class="page-title">确认你的第一周</view>
       <view class="page-subtitle">来源已经固定，Agent 只围绕这条路线安排动作。确认后，今天的核心任务才会进入执行。</view>
     </view>
@@ -21,7 +21,7 @@
 
       <view class="milestone-card card" wx:if="{{milestones.length}}"><view class="section-heading">阶段节奏</view><view class="milestone" wx:for="{{milestones}}" wx:key="week"><text>第 {{item.week}} 周</text><view>{{item.title}}</view><text class="hint">{{item.outcome}}</text></view></view>
       <view class="adjust-card card"><view class="section-heading">需要调整吗？</view><view class="hint">可以告诉 Agent 你的真实限制，例如“工作日只能 30 分钟”。它会重新生成计划，但不会替换已选来源。</view><textarea class="field-control textarea" value="{{adjustment}}" placeholder="可选：写下你的时间或难点" bindinput="input"></textarea><button class="secondary-button small-button" loading="{{generating}}" bindtap="generate">按这句话重新生成</button></view>
-      <view class="plan-actions"><button class="secondary-button" bindtap="backToSources">返回换来源</button><button class="primary-button" loading="{{generating}}" disabled="{{generating || !firstWeek.length}}" bindtap="confirmPlan">确认计划并开始</button></view>
+      <view class="plan-actions"><button class="secondary-button" bindtap="backToSources">返回换来源</button><button class="primary-button" loading="{{generating || confirming}}" disabled="{{generating || confirming || !firstWeek.length}}" bindtap="confirmPlan">确认计划并开始</button></view>
     </block>
   </view>
 </view>

@@ -67,7 +67,6 @@ Page({
       sectionStart: index === 0 || list[index - 1].priorityTier !== task.priorityTier,
       sourceTitle: task.sourceRef && task.sourceRef.sourceTitle || "",
       deadlineText: value(task.deadlineLabel, value(task.deadlineAt).slice(0, 10)),
-      rewardText: `成长 +${Number(task.rewardGrowth) || 0} · 资源 +${Number(task.rewardResource) || 0}`,
     }));
     const companionName = value(companion.name, meta.companionName);
     const prompts = this.buildCompanionPrompts(state, roleId, companionName, tasks);
@@ -133,8 +132,9 @@ Page({
     this.setData({ actionModal: false });
     if (action === "create") this.setData({ inputModal: true, inputMode: "create", inputTitle: "新建支线任务", inputValue: "", inputTaskId: "" });
     if (action === "goal") wx.navigateTo({ url: "/features/account/goal-setup/index" });
-    if (action === "map" || action === "replan") wx.navigateTo({ url: "/features/adventure/goal-map/index" });
   },
+  openGoalWorkbench() { wx.navigateTo({ url: "/features/adventure/goal-map/index" }); },
+  openTodayAdjust() { wx.navigateTo({ url: "/features/adventure/goal-map/index" }); },
   closeInput() { this.setData({ inputModal: false }); },
   noop() {},
   inputChange(event) { this.setData({ inputValue: event.detail.value }); },

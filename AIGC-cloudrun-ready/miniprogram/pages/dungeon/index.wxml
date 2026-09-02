@@ -1,6 +1,6 @@
 <view class="star-page watercolor-page"><view class="page-pad">
   <view class="star-header">
-    <view><view class="tag">GOAL CONSTELLATION SERIES</view><view class="page-title">我的星图</view><view class="page-subtitle">一个长期目标是一组星图系列；每个主线任务点亮一颗星。</view></view>
+    <view><view class="tag">目标星图</view><view class="page-title">我的星图</view><view class="page-subtitle">一个长期目标是一组星图系列；每个核心任务点亮一颗星。</view></view>
     <button class="add-goal" bindtap="openGoal">＋</button>
   </view>
 
