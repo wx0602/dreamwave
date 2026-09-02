@@ -41,11 +41,15 @@ Page({
     storage.set(storage.KEYS.agentId, state.agent && state.agent.agentId || "");
     getApp().globalData.state = state;
     getApp().globalData.goalDraft = null;
+    getApp().globalData.goalSetupPayload = null;
     getApp().globalData.confirmationPayload = null;
     getApp().globalData.registrationPayload = null;
     this.stopProgress();
     this.setData({ progress: 100, stage: "世界入口已开启", working: false });
-    setTimeout(() => wx.redirectTo({ url: "/features/account/init-result/index" }), 420);
+    setTimeout(() => {
+      if (this.confirmation.mode === "PARALLEL") wx.switchTab({ url: "/pages/home/index" });
+      else wx.redirectTo({ url: "/features/account/init-result/index" });
+    }, 420);
   },
 
   async start() {

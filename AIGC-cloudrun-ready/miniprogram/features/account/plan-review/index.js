@@ -102,6 +102,7 @@ Page({
       draftId: draft.draftId,
       expectedRevision: draft.revision,
       confirmationKey: makeConfirmationKey(),
+      mode: draft.mode,
       registration: { account: registration.account || "", password: registration.password || "" },
     };
     wx.navigateTo({ url: "/features/account/entering/index" });

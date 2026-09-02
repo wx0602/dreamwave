@@ -1,14 +1,22 @@
 .home-page { min-height: calc(100vh - env(safe-area-inset-bottom)); padding-bottom: 36rpx; }
-.home-header { display: flex; align-items: flex-start; justify-content: space-between; gap:24rpx; padding: 42rpx 38rpx 34rpx; background: rgba(255,255,255,.76); backdrop-filter: blur(12px); }
+.home-header { display: flex; align-items: flex-start; justify-content: space-between; gap:24rpx; padding: 42rpx 38rpx 28rpx; background: rgba(255,255,255,.76); backdrop-filter: blur(12px); }
 .home-header>view{min-width:0;}
+.home-heading .eyebrow { margin-bottom:10rpx; color:#78a8d1; font-size:19rpx; font-weight:800; letter-spacing:3rpx; }
 .home-title { font-size: 48rpx; font-weight: 700; }
 .chapter,.goal { margin-top: 14rpx; color: #4f6f7a; font-size: 25rpx; }
+.route-note { display:flex; gap:16rpx; align-items:center; margin:0 38rpx; padding:18rpx 22rpx; border-radius:20rpx; color:#718497; background:rgba(255,255,255,.72); font-size:22rpx; line-height:1.45; }
+.route-core { flex:none; color:#4f9ef0; font-weight:700; }
 .add-button { display: flex; align-items: center; justify-content: center; width: 72rpx; height: 72rpx; padding: 0; border-radius: 24rpx; color: #fff; background: linear-gradient(145deg,#79c8ff,#597ee5); font-size: 46rpx; line-height: 1; box-shadow: 0 12rpx 26rpx rgba(79,158,240,.26); }
 .tasks { padding: 18rpx 24rpx 48rpx; }
+.route-section-title { margin:28rpx 14rpx 12rpx; color:#6d83a0; font-size:24rpx; font-weight:800; letter-spacing:1rpx; }
 .task-card { position: relative; margin-top: 20rpx; padding: 32rpx; overflow: hidden; }
+.task-card.core-task { border-color:#bddfff; }
+.task-card.optional-task { border-color:#d9eee8; }
 .task-card::before { content:""; position:absolute; inset:0; pointer-events:none; background: linear-gradient(135deg,rgba(220,238,255,.38),transparent 55%); }
 .task-card.done { opacity: .68; }
 .task-top { position: relative; display: flex; gap: 14rpx; align-items: flex-start; }
+.task-mark { flex:none; width:36rpx; color:#6fb6ff; font-size:30rpx; line-height:1.4; text-align:center; }
+.optional-task .task-mark { color:#82cdbb; }
 .task-title { flex: 1; min-width:0; overflow-wrap:anywhere; font-size: 34rpx; font-weight: 700; line-height: 1.4; }
 .task-tag { flex:none; max-width:42%; overflow:hidden; padding: 8rpx 16rpx; border-radius: 999rpx; color: #57728a; background: #e8f3fc; font-size: 21rpx; text-overflow:ellipsis; white-space:nowrap; }
 .task-detail { position:relative; margin-top: 16rpx; color: #6c7a89; font-size: 25rpx; line-height: 1.65; }

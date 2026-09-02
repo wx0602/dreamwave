@@ -27,14 +27,34 @@ async function run() {
   const roles = await api.listRoles();
   assert(Array.isArray(roles) && roles.length >= 3, "role list is unavailable");
 
-  const created = await api.createSession({
-    account,
-    password,
-    name: "小程序烟测",
-    goal: "完成原生微信小程序迁移验证",
-    deadline: "30 天后",
-    dailyTime: "2 小时",
-    roleId: roles[0].id,
+  let draft = await api.createGoalDraft({
+    mode: "INITIAL",
+    goalProfile: {
+      account,
+      password,
+      name: "小程序烟测",
+      goal: "学习 JavaScript 前端基础",
+      deadline: "30 天后",
+      dailyTime: "2 小时",
+      roleId: roles[0].id,
+    },
+  });
+  draft = await api.searchGoalSources(draft.draftId, {
+    expectedRevision: draft.revision,
+    userSources: [{ title: "小程序迁移验证笔记" }],
+  });
+  assert(draft.sourceBundles && draft.sourceBundles.length, "source bundles are unavailable");
+  draft = await api.selectGoalSources(draft.draftId, {
+    expectedRevision: draft.revision,
+    bundleId: draft.sourceBundles[0].bundleId,
+  });
+  draft = await api.generateGoalPlan(draft.draftId, { expectedRevision: draft.revision });
+  assert(draft.planDraft && draft.planDraft.firstWeek.length, "source-bound plan was not generated");
+  const created = await api.confirmGoalDraft(draft.draftId, {
+    expectedRevision: draft.revision,
+    confirmationKey: "mini-confirm-" + suffix,
+    mode: "INITIAL",
+    registration: { account, password },
   });
   assert(created.state && created.state.initialized, "session was not initialized");
 
@@ -53,8 +73,11 @@ async function run() {
   });
   assert(updated.state.tasks.some((item) => item.taskId === task.taskId && item.estimatedMinutes === 12), "task update failed");
 
-  const completed = await api.completeTask(task.taskId);
+  const completed = await api.completeTask(task.taskId, "");
   assert(completed.state.tasks.some((item) => item.taskId === task.taskId && item.status === "completed"), "task completion failed");
+  const activeTasks = completed.state.tasks.filter((item) => item.status !== "completed");
+  assert(activeTasks.filter((item) => item.priorityTier === "CORE").length <= 1, "more than one core task was released");
+  assert(activeTasks.filter((item) => item.priorityTier === "OPTIONAL").length <= 2, "more than two optional tasks were released");
 
   await api.refreshNextSuggestion(task.taskId);
   state = await api.getCurrentSession();
@@ -81,6 +104,37 @@ async function run() {
 
   const loggedIn = await api.loginSession({ account, password });
   assert(loggedIn.state && loggedIn.state.user && loggedIn.state.user.nickname === "小程序烟测", "login flow failed");
+
+  let secondDraft = await api.createGoalDraft({
+    mode: "PARALLEL",
+    goalProfile: { title: "学习 Python 编程", durationDays: 14, dailyTime: "1 小时" },
+  });
+  secondDraft = await api.searchGoalSources(secondDraft.draftId, {
+    expectedRevision: secondDraft.revision,
+    userSources: [{ title: "Python 练习笔记" }],
+  });
+  secondDraft = await api.selectGoalSources(secondDraft.draftId, {
+    expectedRevision: secondDraft.revision,
+    bundleId: secondDraft.sourceBundles[0].bundleId,
+  });
+  secondDraft = await api.generateGoalPlan(secondDraft.draftId, { expectedRevision: secondDraft.revision });
+  const parallel = await api.confirmGoalDraft(secondDraft.draftId, {
+    expectedRevision: secondDraft.revision,
+    confirmationKey: "mini-parallel-" + suffix,
+    mode: "PARALLEL",
+  });
+  assert(parallel.state.goalPortfolio.goals.length === 2, "parallel goal was not created through draft flow");
+  const finalActive = parallel.state.tasks.filter((item) => item.status !== "completed");
+  assert(finalActive.filter((item) => item.priorityTier === "CORE").length <= 1, "parallel flow released multiple core tasks");
+  assert(finalActive.filter((item) => item.priorityTier === "OPTIONAL").length <= 2, "parallel flow exceeded optional limit");
+
+  let legacyBlocked = false;
+  try {
+    await api.createSession({ account: "legacy-" + suffix, password, name: "旧路径", goal: "不应直接创建" });
+  } catch (error) {
+    legacyBlocked = /确认|来源|计划/.test(error.message);
+  }
+  assert(legacyBlocked, "legacy session endpoint still bypasses confirmation");
 
   console.log("Mini program API smoke test passed.");
 }

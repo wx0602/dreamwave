@@ -1,22 +1,26 @@
 <view class="home-page watercolor-page">
   <view class="home-header">
-    <view><view class="home-title">Todo</view><view class="chapter">当前冒险线：{{chapter}}</view><view class="goal">目标：{{goal}}</view></view>
+    <view class="home-heading"><view class="eyebrow">TODAY'S ROUTE</view><view class="home-title">今日航线</view><view class="chapter">{{chapter}}</view><view class="goal">{{goal}}</view></view>
     <button class="add-button" bindtap="showActions" aria-label="新建与编排">＋</button>
   </view>
+  <view class="route-note"><text class="route-core">✦ 1 个核心</text><text>可选行动最多 2 个 · 完成核心后今天不再追加主线</text></view>
   <view class="tasks">
-    <view class="empty card" wx:if="{{!loading && !tasks.length}}">暂无任务，点击右上角 ＋ 创建新的支线。</view>
-      <view class="task-card card {{item.done ? 'done' : ''}}" wx:for="{{tasks}}" wx:key="taskId">
-      <view class="task-main">
-        <view class="task-top"><view class="task-title">{{item.title}}</view><view class="task-tag">{{item.typeLabel}}</view></view>
-        <view class="task-detail" wx:if="{{item.detail}}">{{item.detail}}</view>
-        <view class="task-meta"><text>{{item.estimatedMinutes || 25}} 分钟</text><text wx:if="{{item.deadlineText}}">截止 {{item.deadlineText}}</text></view>
-        <view class="task-reward">{{item.rewardText}}</view>
+    <view class="empty card" wx:if="{{!loading && !tasks.length}}">今天还没有发布任务。点击右上角 ＋，可以添加一项自定义行动或开启新的长期目标。</view>
+    <block wx:for="{{tasks}}" wx:key="taskId">
+      <view class="route-section-title" wx:if="{{item.sectionStart}}">{{item.priorityTier==='CORE'?'核心任务':'可选行动'}}</view>
+      <view class="task-card card {{item.done ? 'done' : ''}} {{item.priorityTier==='CORE'?'core-task':'optional-task'}}">
+        <view class="task-main">
+          <view class="task-top"><view class="task-mark">{{item.done?'✓':item.priorityTier==='CORE'?'✦':'◇'}}</view><view class="task-title">{{item.title}}</view><view class="task-tag">{{item.typeLabel}}</view></view>
+          <view class="task-detail" wx:if="{{item.detail}}">{{item.detail}}</view>
+          <view class="task-meta"><text>{{item.estimatedMinutes || 25}} 分钟</text><text wx:if="{{item.deadlineText}}">截止 {{item.deadlineText}}</text><text wx:if="{{item.sourceTitle}}">来源：{{item.sourceTitle}}</text></view>
+          <view class="task-reward">{{item.rewardText}}</view>
+        </view>
+        <view class="task-actions" wx:if="{{!item.done}}"><button class="edit-btn" data-index="{{index}}" catchtap="editTask">编辑</button><button class="start-btn" data-index="{{index}}" catchtap="startTask">开始</button></view>
+        <view class="completed" wx:else>已完成 · 记录已写入 Agent 记忆</view>
       </view>
-      <view class="task-actions" wx:if="{{!item.done}}"><button class="edit-btn" data-index="{{index}}" catchtap="editTask">编辑</button><button class="start-btn" data-index="{{index}}" catchtap="startTask">开始</button></view>
-      <view class="completed" wx:else>✓ 已完成</view>
-    </view>
+    </block>
   </view>
-  <view class="syncing" wx:if="{{loading}}"><view class="mini-spinner"></view>正在同步任务</view>
+  <view class="syncing" wx:if="{{loading}}"><view class="mini-spinner"></view>正在同步今日航线</view>
 </view>
 
 <movable-area class="companion-area">
@@ -26,8 +30,7 @@
   </movable-view>
 </movable-area>
 
-<view class="modal-mask action-mask" wx:if="{{actionModal}}" bindtap="closeActions"><view class="action-sheet glass-card" catchtap="noop"><view class="action-heading"><view><view class="action-eyebrow">QUICK ACTIONS</view><view class="modal-title">新建与编排</view></view><button class="action-close" bindtap="closeActions">×</button></view><view class="action-options"><view class="action-card goal-action" data-action="goal" bindtap="runAction"><view class="action-icon">✦</view><view><view class="action-name">新增长期目标</view><view class="action-copy">创建并行星图，每天生成 3 主线 + 2 支线</view></view><text class="action-arrow">›</text></view><view class="action-card create" data-action="create" bindtap="runAction"><view class="action-icon">＋</view><view><view class="action-name">自定义任务</view><view class="action-copy">添加一项临时支线，立即纳入今日节奏</view></view><text class="action-arrow">›</text></view><view class="action-card map" data-action="map" bindtap="runAction"><view class="action-icon">◇</view><view><view class="action-name">目标工作台</view><view class="action-copy">管理并行目标、今日任务与七日节奏</view></view><text class="action-arrow">›</text></view><view class="action-card ai" data-action="replan" bindtap="runAction"><view class="action-icon">↻</view><view><view class="action-name">调整今日任务</view><view class="action-copy">进入工作台预览并调整今天的执行强度</view></view><text class="action-arrow">›</text></view></view></view></view>
+<view class="modal-mask action-mask" wx:if="{{actionModal}}" bindtap="closeActions"><view class="action-sheet glass-card" catchtap="noop"><view class="action-heading"><view><view class="action-eyebrow">QUICK ACTIONS</view><view class="modal-title">新建与编排</view></view><button class="action-close" bindtap="closeActions">×</button></view><view class="action-options"><view class="action-card goal-action" data-action="goal" bindtap="runAction"><view class="action-icon">✦</view><view><view class="action-name">新增长期目标</view><view class="action-copy">先选学习来源，再确认一条专属计划</view></view><text class="action-arrow">›</text></view><view class="action-card create" data-action="create" bindtap="runAction"><view class="action-icon">＋</view><view><view class="action-name">自定义任务</view><view class="action-copy">添加一项临时行动，最多占用两个可选槽位</view></view><text class="action-arrow">›</text></view><view class="action-card map" data-action="map" bindtap="runAction"><view class="action-icon">◇</view><view><view class="action-name">目标工作台</view><view class="action-copy">查看来源、星图与近期节奏</view></view><text class="action-arrow">›</text></view><view class="action-card ai" data-action="replan" bindtap="runAction"><view class="action-icon">↻</view><view><view class="action-name">调整今日任务</view><view class="action-copy">进入工作台预览今天的执行强度</view></view><text class="action-arrow">›</text></view></view></view></view>
 <view class="modal-mask" wx:if="{{inputModal}}" bindtap="closeInput"><view class="modal-card" catchtap="noop"><view class="modal-title">{{inputTitle}}</view><input class="field-control modal-input" value="{{inputValue}}" placeholder="输入一个可执行的小任务" bindinput="inputChange" focus/><view class="modal-actions"><button class="secondary-button small-button" bindtap="closeInput">取消</button><button class="primary-button small-button" bindtap="submitInput">添加</button></view></view></view>
 <view class="modal-mask" wx:if="{{editModal}}"><view class="modal-card"><view class="modal-title">调整任务</view><input class="field-control modal-input" data-key="editTitle" value="{{editTitle}}" placeholder="任务标题" bindinput="editInput"/><textarea class="field-control textarea modal-input" data-key="editDetail" value="{{editDetail}}" placeholder="执行细节" bindinput="editInput"/><input class="field-control modal-input" data-key="editMinutes" value="{{editMinutes}}" type="number" placeholder="投入分钟" bindinput="editInput"/><picker mode="date" value="{{editDeadline}}" bindchange="deadlineChange"><view class="field-control modal-input">截止日期：{{editDeadline}}</view></picker><view class="modal-actions"><button class="secondary-button small-button" bindtap="closeEdit">取消</button><button class="primary-button small-button" bindtap="saveEdit">保存</button></view></view></view>
 <view class="modal-mask" wx:if="{{story}}"><view class="modal-card"><image class="story-image" wx:if="{{story.asset}}" src="{{story.asset}}" mode="aspectFit"/><view class="story-label" wx:if="{{story.assetLabel}}">{{story.assetLabel}}</view><view class="modal-title">{{story.title}}</view><view class="modal-body">{{story.body}}</view><view class="story-meta" wx:if="{{story.meta}}">奖励：{{story.meta}}</view><button class="primary-button small-button story-confirm" bindtap="closeStory">继续冒险</button></view></view>
-<view class="modal-mask" wx:if="{{goalModal}}" bindtap="closeGoal"><view class="modal-card" catchtap="noop"><view class="modal-title">新增长期目标</view><view class="modal-body">每个长期目标对应一个星图系列，每 15 颗主线星组成一张星图；每天生成 3 个主线和 2 个支线。</view><input class="field-control modal-input" data-key="goalTitle" value="{{goalTitle}}" placeholder="例如：30 天完成 CET-6 词汇复习" bindinput="goalInput"/><input class="field-control modal-input" data-key="goalDays" value="{{goalDays}}" type="number" placeholder="持续天数" bindinput="goalInput"/><view class="modal-actions"><button class="secondary-button small-button" bindtap="closeGoal">取消</button><button class="primary-button small-button" bindtap="submitGoal">创建系列</button></view></view></view>

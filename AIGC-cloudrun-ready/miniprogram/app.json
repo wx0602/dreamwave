@@ -9,7 +9,7 @@
   "subpackages": [
     {
       "root": "features/account",
-      "pages": ["login/index", "role-select/index", "register/index", "source-select/index", "plan-review/index", "entering/index", "init-result/index"]
+      "pages": ["login/index", "role-select/index", "register/index", "goal-setup/index", "source-select/index", "plan-review/index", "entering/index", "init-result/index"]
     },
     {
       "root": "features/adventure",

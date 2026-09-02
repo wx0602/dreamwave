@@ -1,0 +1,14 @@
+.goal-setup-page { min-height:100vh; }
+.setup-heading { padding:20rpx 4rpx 16rpx; }
+.setup-heading .page-title { margin-top:18rpx; }
+.setup-card { margin-top:16rpx; padding:30rpx; }
+.picker-row { display:flex; gap:18rpx; }
+.picker-cell { flex:1; min-width:0; }
+.picker-value { min-height:92rpx; padding:26rpx 20rpx; border:2rpx solid #dceeff; border-radius:24rpx; color:#506777; background:#f8fbff; text-align:center; }
+.error { display:block; margin:8rpx 6rpx 0; color:#bd6262; font-size:22rpx; }
+.setup-note { display:flex; gap:18rpx; margin-top:30rpx; padding:22rpx; border-radius:24rpx; color:#4f9ef0; background:#eef7ff; }
+.setup-note > text { flex:none; font-size:36rpx; }
+.note-title { color:#4f6070; font-weight:700; }
+.setup-note .hint { margin-top:6rpx; }
+.setup-actions { display:flex; gap:18rpx; margin-top:34rpx; }
+.setup-actions button { flex:1; min-width:0; }

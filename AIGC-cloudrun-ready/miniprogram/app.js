@@ -4,6 +4,7 @@ App({
   globalData: {
     state: null,
     registrationPayload: null,
+    goalSetupPayload: null,
     goalDraft: null,
     confirmationPayload: null,
     focusTask: null,

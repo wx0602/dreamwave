@@ -3532,6 +3532,19 @@ async function createTask(payload) {
   if (!trimmed) {
     throw new Error("支线任务内容不能为空");
   }
+  const activeOptional = (state.tasks || []).filter((task) => task && !task.done && task.priorityTier === "OPTIONAL");
+  if (activeOptional.length >= PORTFOLIO_SIDE_TASKS_PER_DAY) {
+    const automatic = activeOptional.find((task) => task.source !== "CUSTOM");
+    if (!automatic) {
+      throw new AppError("DAILY_OPTIONAL_LIMIT_REACHED", "今天的可选任务已满，请先完成一个可选任务", 409);
+    }
+    archiveUnscheduledTask(state, automatic, "OPTIONAL_REPLACED_BY_CUSTOM");
+    state.tasks = (state.tasks || []).filter((task) => task.id !== automatic.id);
+    if (state.dailyPlan) {
+      state.dailyPlan.taskIds = (state.dailyPlan.taskIds || []).filter((id) => id !== automatic.id);
+      state.dailyPlan.optionalTaskIds = (state.dailyPlan.optionalTaskIds || []).filter((id) => id !== automatic.id);
+    }
+  }
   const planDate = state.dailyPlan && state.dailyPlan.planDate
     ? state.dailyPlan.planDate
     : getPlanDate(new Date(), state.profile && state.profile.timeZone || DEFAULT_TIME_ZONE);
@@ -3811,6 +3824,32 @@ async function replanGoalTasks(payload) {
   const newGoal = String(payload && payload.newGoal ? payload.newGoal : "").trim();
   const currentStage = getCurrentStage(state);
   const targetTask = taskId ? state.tasks.find((task) => task && task.id === taskId) : null;
+
+  if (state.goalPortfolio && Array.isArray(state.goalPortfolio.goals) && state.goalPortfolio.goals.length > 0) {
+    if (reason === REPLAN_REASONS.CHANGE_DIRECTION) {
+      throw new AppError("GOAL_DRAFT_REQUIRED", "更换长期目标需要重新搜索来源并确认计划", 409);
+    }
+    const linkedGoal = targetTask && targetTask.portfolioGoalId
+      ? state.goalPortfolio.goals.find((goal) => goal.goalId === targetTask.portfolioGoalId)
+      : null;
+    if (linkedGoal) {
+      linkedGoal.aiRollingUpgradePending = true;
+      linkedGoal.planStatus = "CONFIRMED";
+    }
+    state.agent.emotion = "调整";
+    state.lastStory = linkedGoal
+      ? "已记录「" + linkedGoal.title + "」需要调整，今日核心任务保持不变。"
+      : "已记录今日节奏调整，避免重新生成未经确认的长期路线。";
+    state.lastRewardSummary = "执行计划已保留";
+    await ensurePortfolioDailyPlan(state, { source: "PORTFOLIO_REPLAN", force: true });
+    saveStore();
+    return {
+      tag: "goal.replanned",
+      title: "调整请求已记录",
+      storyText: state.lastStory,
+      rewardSummary: state.lastRewardSummary,
+    };
+  }
 
   if (reason === REPLAN_REASONS.CHANGE_DIRECTION) {
     await buildGoalPlanForState(state, newGoal || state.profile.goal, []);
