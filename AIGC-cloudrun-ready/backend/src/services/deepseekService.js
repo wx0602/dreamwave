@@ -30,14 +30,30 @@ async function chatCompletion(messages, options = {}) {
     payload.response_format = options.responseFormat;
   }
 
-  const response = await fetch(env.deepseek.baseUrl, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify(payload),
-  });
+  const controller = new AbortController();
+  const timer = setTimeout(
+    () => controller.abort(),
+    Number(options.timeoutMs) || env.deepseek.timeoutMs || 25000
+  );
+  let response;
+  try {
+    response = await fetch(env.deepseek.baseUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify(payload),
+      signal: controller.signal,
+    });
+  } catch (error) {
+    if (error && error.name === "AbortError") {
+      throw new Error("DeepSeek 调用超时");
+    }
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
 
   if (!response.ok) {
     const errorText = await response.text();

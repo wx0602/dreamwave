@@ -192,6 +192,147 @@ function buildTaskDto(task) {
     weeklyMilestoneId: cleanText(source.weeklyMilestoneId),
     weeklyMilestoneTitle: cleanText(source.weeklyMilestoneTitle),
     qualityScore: toNumber(source.qualityScore, 0),
+    priorityTier: cleanText(source.priorityTier) || (taskType === "main" ? "CORE" : "OPTIONAL"),
+    selectionReason: cleanText(source.selectionReason),
+    completionSummary: cleanText(source.completionSummary),
+    originDraftId: cleanText(source.originDraftId),
+    sourceRef: buildSourceRefDto(source.sourceRef),
+  };
+}
+
+function buildSourceRefDto(sourceRef) {
+  const source = asObject(sourceRef);
+  if (!source) return null;
+  return {
+    sourceId: cleanText(source.sourceId),
+    sourceTitle: cleanText(source.sourceTitle),
+    locatorType: cleanText(source.locatorType),
+    locatorLabel: cleanText(source.locatorLabel),
+    locatorUrl: cleanText(source.locatorUrl),
+    verified: Boolean(source.verified),
+  };
+}
+
+function buildLearningSourceDto(source) {
+  const value = asObject(source) || {};
+  return {
+    sourceId: cleanText(value.sourceId),
+    origin: cleanText(value.origin),
+    title: cleanText(value.title),
+    provider: cleanText(value.provider),
+    type: cleanText(value.type),
+    url: cleanText(value.url),
+    accessType: cleanText(value.accessType),
+    editionOrVersion: cleanText(value.editionOrVersion),
+    language: cleanText(value.language),
+    description: cleanText(value.description),
+    structure: Array.isArray(value.structure) ? value.structure.map((entry) => ({
+      locatorType: cleanText(entry && entry.locatorType),
+      locatorLabel: cleanText(entry && entry.locatorLabel),
+      locatorUrl: cleanText(entry && entry.locatorUrl),
+      order: toNumber(entry && entry.order, 0),
+    })) : [],
+    outlineStatus: cleanText(value.outlineStatus),
+    verificationStatus: cleanText(value.verificationStatus),
+    verifiedAt: cleanText(value.verifiedAt),
+    caution: cleanText(value.caution),
+  };
+}
+
+function buildSourceBundleDto(bundle) {
+  const value = asObject(bundle) || {};
+  return {
+    bundleId: cleanText(value.bundleId),
+    label: cleanText(value.label),
+    sourceIds: Array.isArray(value.sourceIds) ? value.sourceIds.map(cleanText).filter(Boolean) : [],
+    sourceRoles: Array.isArray(value.sourceRoles) ? value.sourceRoles.map((role) => ({
+      sourceId: cleanText(role && role.sourceId),
+      role: cleanText(role && role.role),
+    })) : [],
+    fitReason: cleanText(value.fitReason),
+    caution: cleanText(value.caution),
+    estimatedScope: cleanText(value.estimatedScope),
+    recommended: Boolean(value.recommended),
+  };
+}
+
+function buildSourceBoundPlanDto(plan) {
+  const value = asObject(plan);
+  if (!value) return null;
+  return {
+    version: toNumber(value.version, 1),
+    goalTitle: cleanText(value.goalTitle),
+    stageGoals: Array.isArray(value.stageGoals) ? value.stageGoals.map((stage) => ({
+      stageId: cleanText(stage && stage.stageId),
+      title: cleanText(stage && stage.title),
+      description: cleanText(stage && stage.description),
+      startDay: toNumber(stage && stage.startDay, 0),
+      endDay: toNumber(stage && stage.endDay, 0),
+      sourceIds: Array.isArray(stage && stage.sourceIds) ? stage.sourceIds.map(cleanText).filter(Boolean) : [],
+    })) : [],
+    firstWeek: Array.isArray(value.firstWeek) ? value.firstWeek.map((day) => ({
+      day: toNumber(day && day.day, 0),
+      coreTask: day && day.coreTask ? {
+        title: cleanText(day.coreTask.title),
+        detail: cleanText(day.coreTask.detail),
+        estimatedMinutes: toNumber(day.coreTask.estimatedMinutes, 0),
+        sourceRef: buildSourceRefDto(day.coreTask.sourceRef),
+        selectionReason: cleanText(day.coreTask.selectionReason),
+      } : null,
+      optionalTasks: Array.isArray(day && day.optionalTasks) ? day.optionalTasks.map((task) => ({
+        title: cleanText(task && task.title),
+        detail: cleanText(task && task.detail),
+        estimatedMinutes: toNumber(task && task.estimatedMinutes, 0),
+        sourceRef: buildSourceRefDto(task && task.sourceRef),
+        selectionReason: cleanText(task && task.selectionReason),
+      })) : [],
+    })) : [],
+    weeklyMilestones: Array.isArray(value.weeklyMilestones) ? value.weeklyMilestones.map((milestone) => ({
+      week: toNumber(milestone && milestone.week, 0),
+      title: cleanText(milestone && milestone.title),
+      outcome: cleanText(milestone && milestone.outcome),
+    })) : [],
+    totalEstimatedMinutesFirstWeek: toNumber(value.totalEstimatedMinutesFirstWeek, 0),
+    generatedAt: cleanText(value.generatedAt),
+    source: cleanText(value.source),
+    planWarnings: Array.isArray(value.planWarnings) ? value.planWarnings.map(cleanText).filter(Boolean) : [],
+  };
+}
+
+function buildGoalDraftDto(draft) {
+  const value = asObject(draft) || {};
+  const profile = asObject(value.goalProfile) || {};
+  return {
+    draftId: cleanText(value.draftId),
+    revision: toNumber(value.revision, 0),
+    mode: cleanText(value.mode),
+    status: cleanText(value.status),
+    goalProfile: {
+      roleId: cleanText(profile.roleId),
+      name: cleanText(profile.name),
+      title: cleanText(profile.title),
+      deadline: cleanText(profile.deadline),
+      durationDays: toNumber(profile.durationDays, 0),
+      dailyTime: cleanText(profile.dailyTime),
+      dailyBudgetMinutes: toNumber(profile.dailyBudgetMinutes, 0),
+      currentLevel: cleanText(profile.currentLevel),
+      sourcePreference: cleanText(profile.sourcePreference),
+      accessPreference: cleanText(profile.accessPreference),
+    },
+    userProvidedSources: Array.isArray(value.userProvidedSources) ? value.userProvidedSources.map(buildLearningSourceDto) : [],
+    sourceCandidates: Array.isArray(value.sourceCandidates) ? value.sourceCandidates.map(buildLearningSourceDto) : [],
+    sourceBundles: Array.isArray(value.sourceBundles) ? value.sourceBundles.map(buildSourceBundleDto) : [],
+    selectedBundleId: cleanText(value.selectedBundleId),
+    selectedSourceIds: Array.isArray(value.selectedSourceIds) ? value.selectedSourceIds.map(cleanText).filter(Boolean) : [],
+    planDraft: buildSourceBoundPlanDto(value.planDraft),
+    planWarnings: Array.isArray(value.planWarnings) ? value.planWarnings.map(cleanText).filter(Boolean) : [],
+    searchMode: cleanText(value.searchMode),
+    lastAdjustment: cleanText(value.lastAdjustment),
+    createdAt: cleanText(value.createdAt),
+    updatedAt: cleanText(value.updatedAt),
+    expiresAt: cleanText(value.expiresAt),
+    confirmedAt: cleanText(value.confirmedAt),
+    confirmedGoalId: cleanText(value.confirmedGoalId),
   };
 }
 
@@ -265,11 +406,18 @@ function buildGoalPortfolioDto(portfolio) {
           description: cleanText(goal && goal.description),
           durationDays: toNumber(goal && goal.durationDays, 0),
           completedDays: toNumber(goal && goal.completedDays, 0),
-          starsPerDay: toNumber(goal && goal.starsPerDay, 3),
+          starsPerDay: toNumber(goal && goal.starsPerDay, 1),
           completedStars: toNumber(goal && goal.completedStars, 0),
           totalStarCount: toNumber(goal && goal.totalStarCount, 0),
           planningVersion: toNumber(goal && goal.planningVersion, 0),
           dailyBudgetMinutes: toNumber(goal && goal.dailyBudgetMinutes, 0),
+          originDraftId: cleanText(goal && goal.originDraftId),
+          sourcePreferences: asObject(goal && goal.sourcePreferences),
+          learningSources: Array.isArray(goal && goal.learningSources) ? goal.learningSources.map(buildLearningSourceDto) : [],
+          selectedSourceBundleId: cleanText(goal && goal.selectedSourceBundleId),
+          planStatus: cleanText(goal && goal.planStatus),
+          planConfirmedAt: cleanText(goal && goal.planConfirmedAt),
+          priority: cleanText(goal && goal.priority) || "INACTIVE",
           planningQuality: goal && goal.planningQuality ? {
             score: toNumber(goal.planningQuality.score, 0),
             status: cleanText(goal.planningQuality.status),
@@ -337,6 +485,10 @@ function buildGoalPortfolioDto(portfolio) {
                 phaseTitle: cleanText(node && node.phaseTitle),
                 weeklyMilestoneId: cleanText(node && node.weeklyMilestoneId),
                 weeklyMilestoneTitle: cleanText(node && node.weeklyMilestoneTitle),
+                sourceRef: buildSourceRefDto(node && node.sourceRef),
+                priorityTier: cleanText(node && node.priorityTier) || "CORE",
+                selectionReason: cleanText(node && node.selectionReason),
+                legacyNode: Boolean(node && node.legacyNode),
               }))
             : [],
         }))
@@ -882,4 +1034,9 @@ module.exports = {
   buildAgentMemory,
   buildSuccessResponse,
   buildErrorResponse,
+  buildSourceRefDto,
+  buildLearningSourceDto,
+  buildSourceBundleDto,
+  buildSourceBoundPlanDto,
+  buildGoalDraftDto,
 };
