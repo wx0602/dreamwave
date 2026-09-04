@@ -23,13 +23,14 @@ npm run check:backend
 | 方法 | 路径 | 服务层方法 |
 | :--- | :--- | :--- |
 | `GET` | `/roles` | `listAvailableRoles()` |
-| `POST` | `/sessions` | `createSession()` |
+| `POST` | `/goal-drafts` 及其 action 路由 | Goal Draft 状态机 |
+| `POST` | `/sessions` | 已停用，410 `GOAL_DRAFT_REQUIRED` |
 | `POST` | `/session-logins` | `loginSession()` |
 | `GET` | `/sessions/current` | `getCurrentSessionState()` |
 | `POST` | `/tasks` | `createTask()` |
 | `POST` | `/tasks/{taskId}/completion` | `completeTask()` |
-| `POST` | `/goals` | `createParallelGoal()` |
-| `POST` | `/goals/advance` | `advanceGoal()` |
+| `POST` | `/goals`、`/goals/advance` | 已停用，410 `GOAL_DRAFT_REQUIRED` |
+| `POST` | `/goals/{goalId}/priority` | `updateGoalPriority()` |
 | `GET` | `/dungeons/current/status` | `getCurrentDungeonProfile()` + `getDungeonState()` |
 | `GET` | `/agents/current` | `getCurrentAgentProfile()` |
 | `GET` | `/agents/current/memories` | `getCurrentAgentMemories()` |

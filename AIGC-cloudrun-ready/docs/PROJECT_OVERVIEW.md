@@ -308,7 +308,7 @@ Base URL：`http://127.0.0.1:3001`；业务前缀：`/api`。
 | `POST` | `/api/tasks/{taskId}/edits` | `title,detail,estimatedMinutes,deadlineAt` | 编辑未归档的当前任务 |
 | `POST` | `/api/tasks/{taskId}/completion` | `summary?` | 完成任务并执行完整结算；总结可跳过，填写时 5—100 字 |
 | `POST` | `/api/goals` | 旧兼容输入 | 已阻断；并行目标必须走草稿确认流程 |
-| `POST` | `/api/goals/advance` | `goal,deadline?,dailyTime?` | 归档旧单目标赛季并进入新主线 |
+| `POST` | `/api/goals/advance` | 旧兼容输入 | 已阻断；新目标必须走草稿确认流程 |
 | `POST` | `/api/goals/replan` | `reason,taskId?,newGoal?` | 拆小、替换、调轻或改换方向 |
 | `POST` | `/api/goals/next-suggestion` | `completedTaskId?` | 刷新下一步建议 |
 | `POST` | `/api/goals/adopt-suggestion` | `suggestion?` | 将建议采纳为支线 |

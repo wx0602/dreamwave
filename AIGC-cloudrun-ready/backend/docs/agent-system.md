@@ -119,16 +119,16 @@
 ## 8. 前后端数据流
 
 1. **初始化**
-   - 前端调用 `POST /api/sessions`
-   - 后端建立角色、技能、副本面板、弧光和 `activeSeason`
+   - 前端依次创建 Goal Draft、搜索与确认来源、审核计划，最后调用 confirmations
+   - 后端只在确认后建立角色、技能、副本面板、弧光和 `activeSeason`
 2. **执行任务**
    - 前端调用 `POST /api/tasks/:taskId/completion`
    - 后端写入 `storyText`、`memorySummary`、`worldEntities`
 3. **主线完成**
    - 后端额外生成 `chapterFinale`
-4. **新赛季开启**
-   - 前端调用 `POST /api/goals/advance`
-   - 后端归档 `seasonArchive` 并更新永久称号
+4. **新目标开启**
+   - 新目标同样经过 Goal Draft 来源和计划确认；旧直建接口返回 `GOAL_DRAFT_REQUIRED`
+   - 用户看到一个角色 Agent，后台按来源策展、计划编排、全局调度、执行教练、完成解释和记忆整理分工，不是多 Agent 对话
 5. **刷新状态**
    - 前端通过 `GET /api/sessions/current` 获取 `characterArc`、`memoryTree`、`worldState`
 
