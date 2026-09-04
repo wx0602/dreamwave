@@ -18,6 +18,7 @@ const {
   validateSourceBundles,
 } = require("../src/services/learningSourceRankingService");
 const curatedCatalogAdapter = require("../src/services/adapters/curatedCatalogAdapter");
+const { validateSourceBoundPlan } = require("../src/services/sourceBoundPlanningService");
 
 function response(status, body = {}) {
   return {
@@ -118,6 +119,21 @@ async function run() {
     assert.strictEqual(curatedCatalogAdapter.search("CET-6 阅读练习", {}, { goalTitle: "CET-6 阅读练习" }).length, 0);
     assert.strictEqual(curatedCatalogAdapter.search("学习日语", {}, { goalTitle: "学习日语" }).length, 0);
     assert(curatedCatalogAdapter.loadCatalog().every((item) => item.verifiedAt && item.caution));
+
+    const planContext = {
+      goalProfile: { title: "学习 JavaScript", durationDays: 7, dailyBudgetMinutes: 60 },
+      sources: [catalogSource], selectedSourceIds: [catalogSource.sourceId],
+    };
+    const vaguePlan = {
+      firstWeek: [{ day: 1, coreTask: { title: "学习一下", detail: "继续学习", estimatedMinutes: 25, sourceRef: { sourceId: catalogSource.sourceId, locatorType: "URL" } }, optionalTasks: [] }],
+      stageGoals: [{ title: "阶段一" }, { title: "阶段二" }],
+    };
+    const vagueResult = validateSourceBoundPlan(vaguePlan, planContext);
+    assert.strictEqual(vagueResult.valid, false);
+    assert(vagueResult.issues.some((issue) => issue.startsWith("VAGUE_CORE") || issue.startsWith("CORE_NOT_SPECIFIC")));
+    const unknownResult = validateSourceBoundPlan({ ...vaguePlan, firstWeek: [{ ...vaguePlan.firstWeek[0], coreTask: { ...vaguePlan.firstWeek[0].coreTask, title: "阅读语法基础第 1 节", detail: "记录 1 个示例", sourceRef: { sourceId: "invented", locatorType: "CHAPTER", locatorLabel: "不存在章节" } } }] }, planContext);
+    assert.strictEqual(unknownResult.valid, false);
+    assert(unknownResult.issues.some((issue) => issue.startsWith("RAW_CORE_SOURCE")));
 
     await expectAppError(
       () => searchLearningSources({ title: "无来源目标", durationDays: 7 }, {

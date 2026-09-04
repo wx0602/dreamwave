@@ -22,6 +22,7 @@ const {
 } = require("../src/services/goalDraftService");
 const {
   createSession,
+  createParallelGoal,
   confirmGoalDraft,
   getCurrentSessionState,
 } = require("../src/services/sessionService");
@@ -135,6 +136,28 @@ async function run() {
     state = await getCurrentSessionState();
     assert.strictEqual(state.goalPortfolio.goals.length, 2, "重复确认不得重复创建目标");
     assert.deepStrictEqual(secondEvent, firstEvent);
+
+    const concurrentDraft = await prepareParallelDraft("并发确认测试目标");
+    const concurrentPrepared = getDraftForConfirmation(concurrentDraft.draftId, concurrentDraft.revision);
+    const concurrentEvents = await Promise.all([
+      confirmGoalDraft(concurrentPrepared, { confirmationKey: "concurrent-confirm-key" }),
+      confirmGoalDraft(concurrentPrepared, { confirmationKey: "concurrent-confirm-key" }),
+    ]);
+    state = await getCurrentSessionState();
+    assert.strictEqual(state.goalPortfolio.goals.filter((goal) => goal.originDraftId === concurrentDraft.draftId).length, 1);
+    assert.deepStrictEqual(concurrentEvents[0], concurrentEvents[1]);
+    await expectCode(
+      () => confirmGoalDraft(concurrentPrepared, { confirmationKey: "different-confirm-key" }),
+      "DRAFT_ALREADY_CONFIRMED"
+    );
+
+    const recoveryDraft = await prepareParallelDraft("确认回执恢复测试目标");
+    const recoveryPrepared = getDraftForConfirmation(recoveryDraft.draftId, recoveryDraft.revision);
+    await createParallelGoal({ confirmedDraft: recoveryPrepared });
+    const recoveredEvent = await confirmGoalDraft(recoveryPrepared, { confirmationKey: "recovery-confirm-key" });
+    assert(recoveredEvent && recoveredEvent.tag === "goal.created.parallel");
+    state = await getCurrentSessionState();
+    assert.strictEqual(state.goalPortfolio.goals.filter((goal) => goal.originDraftId === recoveryDraft.draftId).length, 1);
 
     const confirmed = getGoalDraft(draft.draftId);
     assert.strictEqual(confirmed.status, "CONFIRMED");

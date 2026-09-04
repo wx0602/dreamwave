@@ -112,6 +112,12 @@ for (const file of walk(miniRoot)) {
 
 const apiSource = fs.readFileSync(path.join(miniRoot, "services", "api.js"), "utf8");
 if (!apiSource.includes("wx.cloud.callContainer")) errors.push("services/api.js must use wx.cloud.callContainer");
+if (!apiSource.includes("error.code =")) errors.push("services/api.js must preserve structured business error codes");
+const completionSource = fs.readFileSync(path.join(miniRoot, "features", "adventure", "completion", "index.js"), "utf8");
+if (!/skipSummary\(\)\s*\{\s*return this\.submitSummary\(""\)/.test(completionSource)) errors.push("completion skip action must submit an empty summary");
+if (/const STAGES|setInterval\(/.test(completionSource)) errors.push("completion page must not simulate settlement progress");
+const sourceSelectSource = fs.readFileSync(path.join(miniRoot, "features", "account", "source-select", "index.js"), "utf8");
+if (!sourceSelectSource.includes("onShow()") || !sourceSelectSource.includes("bundle.bundleId === selectedBundleId")) errors.push("source selection must refresh revisions and update visual selection");
 for (const file of walk(miniRoot).filter((item) => item.endsWith(".js"))) {
   if (file === path.join(miniRoot, "services", "api.js")) continue;
   const source = fs.readFileSync(file, "utf8");
