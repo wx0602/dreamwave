@@ -12,7 +12,8 @@
         <view class="task-main">
           <view class="task-top"><view class="task-mark">{{item.done?'✓':item.priorityTier==='CORE'?'✦':'◇'}}</view><view class="task-title">{{item.title}}</view><view class="task-tag">{{item.typeLabel}}</view></view>
           <view class="task-detail" wx:if="{{item.detail}}">{{item.detail}}</view>
-          <view class="task-meta"><text>{{item.estimatedMinutes || 25}} 分钟</text><text wx:if="{{item.deadlineText}}">截止 {{item.deadlineText}}</text><text wx:if="{{item.sourceTitle}}">来源：{{item.sourceTitle}}</text></view>
+          <view class="task-meta"><text>{{item.estimatedMinutes || 25}} 分钟</text><text wx:if="{{item.deadlineText}}">截止 {{item.deadlineText}}</text><text wx:if="{{item.sourceTitle}}">来源：{{item.sourceTitle}}{{item.sourceLocator && item.sourceLocator!==item.sourceTitle?' · '+item.sourceLocator:''}}</text></view>
+          <view class="task-reason" wx:if="{{item.priorityTier==='CORE' && item.selectionReason}}">为什么今天做：{{item.selectionReason}}</view>
         </view>
         <view class="task-actions" wx:if="{{!item.done}}"><button class="edit-btn" data-index="{{index}}" catchtap="editTask">编辑</button><button class="start-btn" data-index="{{index}}" catchtap="startTask">开始</button></view>
         <view class="completed" wx:else>已完成 · 记录已写入 Agent 记忆</view>

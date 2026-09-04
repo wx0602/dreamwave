@@ -24,22 +24,16 @@
     <block wx:else>
       <view class="overview-card card">
         <view class="overview-head"><view><view class="eyebrow">当前系列 · {{activeGoal.priorityLabel}}</view><view class="overview-title">{{activeGoal.title}}</view></view><button class="map-link" bindtap="openStarMap">查看星图 ›</button></view>
-        <view class="metric-row"><view class="metric"><text>{{todayMainDone}}/1</text><view>今日核心</view></view><view class="metric"><text>{{activeGoal.completedStars}}/{{activeGoal.totalStarCount}}</text><view>系列星数</view></view><view class="metric"><text>{{activeGoal.mapDone}}/{{mapCount}}</text><view>收集星图</view></view></view>
+        <view class="metric-row"><view class="metric"><text>{{activeGoal.completedStars}}/{{activeGoal.totalStarCount}}</text><view>已点亮核心星数</view></view></view>
         <view class="current-map"><view class="map-mark">✦</view><view class="map-copy"><view>第 {{currentMapOrder}} 图 · {{currentMapName}}</view><text>当前星图已点亮 {{currentMapProgress}}%</text></view><view class="map-percent">{{currentMapProgress}}%</view></view>
       </view>
 
-      <view class="planning-card card"><view class="planning-head"><view class="section-title">近期计划</view><view class="plan-range">{{horizonLabel}}</view></view><view class="quality-status">{{planningStatusLabel}} · 已围绕确认来源生成</view><view class="plan-level" wx:if="{{currentPhase}}"><text>阶段</text><view>{{currentPhase.title}}</view><view class="level-days">D{{currentPhase.startDay}}—D{{currentPhase.endDay}}</view></view><view class="plan-level milestone" wx:if="{{currentMilestone}}"><text>本周</text><view>{{currentMilestone.focus}}</view></view></view>
+      <view class="planning-card card"><view class="planning-head"><view class="section-title">已确认路线</view></view><view class="source-summary" wx:for="{{confirmedSources}}" wx:key="sourceId">{{item.title}}<text wx:if="{{item.editionOrVersion}}"> · {{item.editionOrVersion}}</text></view><view class="plan-level" wx:if="{{currentPhase}}"><text>当前阶段</text><view>{{currentPhase.title}}</view><view class="level-days">D{{currentPhase.startDay}}—D{{currentPhase.endDay}}</view></view></view>
 
-      <view class="section-bar"><view class="section-title">今天</view><text>核心 {{todayMainDone}}/1 · 可选 {{todaySideDone}}/2</text></view>
-      <view class="today-empty card" wx:if="{{!todayTasks.length}}">今天的任务尚未释放，刷新或等待新一天开始。</view>
-      <view class="task-card card {{item.done?'done':''}} {{item.typeClass}}" wx:for="{{todayTasks}}" wx:key="taskId">
-        <view class="task-symbol">{{item.done?'✓':item.priorityTier==='OPTIONAL'?'◇':'✦'}}</view>
-        <view class="task-body" data-index="{{index}}" bindtap="startTask"><view class="task-top"><text class="task-time">{{item.estimatedMinutes}} 分钟</text><text class="task-type">{{item.typeLabel}}</text></view><view class="task-title">{{item.title}}</view><view class="task-detail">{{item.detail}}</view><view class="task-source" wx:if="{{item.sourceRef && item.sourceRef.sourceTitle}}">来源：{{item.sourceRef.sourceTitle}}</view></view>
-        <button class="task-more" wx:if="{{!item.done}}" data-index="{{index}}" catchtap="openTaskActions">···</button>
-      </view>
+      <view class="section-bar"><view class="section-title">今天</view><text>核心 {{todayMainDone}}/1 · 可选 {{todaySideDone}}/2</text></view><button class="secondary-button" bindtap="goToday">返回今天</button>
 
       <view class="section-bar rhythm-heading"><view class="section-title">七日节奏</view></view>
-      <view class="rhythm-card card"><view class="rhythm-day {{item.current?'current':''}} {{item.complete?'complete':''}} {{item.future?'future':''}}" wx:for="{{rhythmDays}}" wx:key="goalDay"><view class="weekday">{{item.current?'今':item.weekday}}</view><view class="rhythm-date">{{item.dayText}}</view><view class="day-dots"><text class="{{dot.done?'lit':''}}" wx:for="{{item.dots}}" wx:for-item="dot" wx:key="id">✦</text></view><view class="day-index">D{{item.goalDay}}</view></view></view>
+      <view class="rhythm-card card" style="display:block;padding:12rpx 24rpx"><view class="rhythm-row {{item.current?'current':''}} {{item.complete?'complete':''}}" style="display:flex;align-items:center;gap:18rpx;padding:20rpx 4rpx;border-bottom:1rpx solid #e8f0f6" wx:for="{{rhythmDays}}" wx:key="goalDay"><view class="day-index" style="width:128rpx;margin:0">D{{item.goalDay}} · {{item.current?'今天':item.dayText}}</view><view class="rhythm-task" style="min-width:0;flex:1"><view>{{item.title}}</view><text wx:if="{{item.sourceTitle}}">{{item.sourceTitle}}</text></view><view>{{item.complete?'✓':'✦'}}</view></view></view>
     </block>
   </view>
   <view class="loading-pill" wx:if="{{loading}}"><view class="mini-spinner"></view>正在同步目标</view>

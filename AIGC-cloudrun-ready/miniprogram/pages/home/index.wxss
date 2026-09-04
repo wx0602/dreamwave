@@ -63,3 +63,4 @@
 .story-confirm { margin-top:28rpx; }
 @media (max-width:360px){.home-header{padding-left:24rpx;padding-right:24rpx}.tasks{padding-left:16rpx;padding-right:16rpx}.task-card{padding:24rpx}.task-actions{gap:8rpx}.task-actions button{font-size:22rpx}.task-tag{max-width:36%}.companion-panel{width:360rpx}}
 .home-links{display:flex;justify-content:center;gap:34rpx;margin:0 24rpx 24rpx;color:#5f93c0;font-size:23rpx}
+.task-reason { margin-top:14rpx; color:#6685a0; font-size:23rpx; line-height:1.55; }

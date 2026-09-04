@@ -418,12 +418,6 @@ function buildGoalPortfolioDto(portfolio) {
           planStatus: cleanText(goal && goal.planStatus),
           planConfirmedAt: cleanText(goal && goal.planConfirmedAt),
           priority: cleanText(goal && goal.priority) || "INACTIVE",
-          planningQuality: goal && goal.planningQuality ? {
-            score: toNumber(goal.planningQuality.score, 0),
-            status: cleanText(goal.planningQuality.status),
-            horizonStartDay: toNumber(goal.planningQuality.horizonStartDay, 0),
-            horizonEndDay: toNumber(goal.planningQuality.horizonEndDay, 0),
-          } : null,
           phases: goal && goal.planningBlueprint && Array.isArray(goal.planningBlueprint.phases)
             ? goal.planningBlueprint.phases.map((phase) => ({
                 phaseId: cleanText(phase && phase.phaseId),

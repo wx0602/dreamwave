@@ -4,9 +4,10 @@
 .completion-title { margin-top:36rpx; }
 .summary-input { width:100%; min-height:190rpx; margin-top:30rpx; padding:24rpx; border:2rpx solid #dceeff; border-radius:24rpx; background:#f8fbff; color:#2f3440; text-align:left; line-height:1.65; }
 .summary-hint { margin-top:14rpx; color:#9aa6b2; font-size:22rpx; line-height:1.5; }
+.summary-hint { display:flex; justify-content:space-between; gap:20rpx; }
+.skip-summary { margin-top:24rpx; color:#7890a5; font-size:24rpx; }
 .summary-actions { display:flex; gap:16rpx; margin-top:30rpx; }
 .summary-actions button { flex:1; min-width:0; }
-.progress-row { display:flex; align-items:center; gap:18rpx; margin-top:32rpx; color:#4f9ef0; font-weight:700; }
 .error { margin-top:26rpx; color:#c56565; line-height:1.6; }
 .error-actions { display:flex; gap:18rpx; margin-top:28rpx; }
 .error-actions button { flex:1; }

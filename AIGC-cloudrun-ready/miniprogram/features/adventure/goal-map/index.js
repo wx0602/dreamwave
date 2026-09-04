@@ -25,7 +25,7 @@ Page({
     loading: true, state: null, goals: [], selectedGoalId: "", activeGoal: null, todayTasks: [],
     todayMainDone: 0, todaySideDone: 0, rhythmDays: [],
     currentMapName: "尚未开始", currentMapProgress: 0, currentMapOrder: 0, mapCount: 0,
-    planningStatusLabel: "待检查", currentPhase: null, currentMilestone: null, horizonLabel: "",
+    currentPhase: null, currentMilestone: null, confirmedSources: [],
     editModal: false, editTask: null, editTitle: "", editDetail: "", editMinutes: "25",
     previewModal: false, previewItems: [], story: null,
   },
@@ -90,15 +90,13 @@ Page({
       || Math.min(Number(activeGoal && activeGoal.durationDays || 1), Number(activeGoal && activeGoal.completedDays || 0) + 1);
     const currentPhase = activeGoal ? (activeGoal.phases || []).find((phase) => currentDay >= phase.startDay && currentDay <= phase.endDay) || null : null;
     const currentMilestone = activeGoal ? (activeGoal.weeklyMilestones || []).find((milestone) => currentDay >= milestone.startDay && currentDay <= milestone.endDay) || null : null;
-    const planningQuality = activeGoal && activeGoal.planningQuality || {};
     this.setData({
       state, goals, selectedGoalId: activeGoal ? activeGoal.goalId : "", activeGoal, todayTasks,
       todayMainDone, todaySideDone, rhythmDays: this.buildRhythm(activeGoal, todayTasks),
       currentMapName: currentMap ? currentMap.constellationName : "尚未开始", currentMapOrder: currentMap ? currentMap.order : 0,
       currentMapProgress: currentMap && currentMap.starCount ? Math.round(Number(currentMap.completedStars || 0) * 100 / Number(currentMap.starCount)) : 0,
       mapCount: maps.length,
-      planningStatusLabel: planningQuality.status === "PASSED" ? "已检查" : "待调整", currentPhase, currentMilestone,
-      horizonLabel: planningQuality.horizonStartDay ? "D" + planningQuality.horizonStartDay + "—D" + planningQuality.horizonEndDay : "尚未生成",
+      currentPhase, currentMilestone, confirmedSources: activeGoal ? (activeGoal.learningSources || []).slice(0, 2) : [],
     });
   },
 
@@ -114,12 +112,14 @@ Page({
       const dayNodes = nodes.filter((node) => Number(node.day) === goalDay);
       const completed = dayNodes.filter((node) => isDone(node)).length;
       const date = addDays(goal.startDate, goalDay - 1);
-      return { ...date, goalDay, completed, total: Math.max(1, dayNodes.length), current: goalDay === currentDay, future: goalDay > currentDay, complete: completed >= 1, dots: [{ done: completed > 0, id: goalDay + "-0" }] };
+      const core = dayNodes.find((node) => node.priorityTier === "CORE") || dayNodes[0] || {};
+      return { ...date, goalDay, completed, total: Math.max(1, dayNodes.length), current: goalDay === currentDay, future: goalDay > currentDay, complete: completed >= 1, title: core.title || "等待计划生成", sourceTitle: core.sourceRef && (core.sourceRef.locatorLabel || core.sourceRef.sourceTitle) || "" };
     });
   },
 
   selectGoal(event) { this.render(this.data.state, event.currentTarget.dataset.id); },
   openStarMap() { wx.navigateTo({ url: "/pages/dungeon/index" }); },
+  goToday() { wx.switchTab({ url: "/pages/home/index" }); },
 
   setGoalPriority(event) {
     const goal = this.data.goals.find((item) => item.goalId === event.currentTarget.dataset.id);
