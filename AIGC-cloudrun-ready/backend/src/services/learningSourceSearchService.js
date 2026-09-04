@@ -71,6 +71,12 @@ function dedupeSources(sources) {
   return [...byKey.values()].slice(0, 12);
 }
 
+function isUsableCandidate(source, preferences = {}) {
+  if (!source || source.verificationStatus === "UNAVAILABLE") return false;
+  if (preferences.accessPreference === "FREE_ONLY" && source.accessType === "PAID") return false;
+  return true;
+}
+
 async function verifyCandidates(candidates) {
   const output = [];
   for (let index = 0; index < candidates.length; index += 3) {
@@ -104,7 +110,7 @@ async function searchLearningSources(goalProfile, options = {}) {
   const raw = [];
   for (const query of buildQueries(profile, userSources)) {
     try {
-      raw.push(...await tool.searchSources(query, preferences));
+      raw.push(...await tool.searchSources(query, preferences, { goalTitle: profile.title }));
     } catch (error) {
       // Keep catalog/user fallback; provider errors are returned as warnings.
     }
@@ -118,12 +124,16 @@ async function searchLearningSources(goalProfile, options = {}) {
     const outline = await tool.extractPublicOutline(source);
     return { ...source, structure: outline.structure || source.structure || [], outlineStatus: outline.outlineStatus || source.outlineStatus };
   }));
-  const ranked = await rankSourceBundles(outlined, { goalProfile: profile, preferences }, { apiKey: options.apiKey || getResolvedApiKey() });
+  const usableCandidates = outlined.filter((source) => isUsableCandidate(source, preferences));
+  const ranked = await rankSourceBundles(usableCandidates, { goalProfile: profile, preferences }, { apiKey: options.apiKey || getResolvedApiKey() });
   if (!ranked.bundles.length) {
     throw new AppError("NO_RELIABLE_SOURCE", "找到的来源不足以形成可靠路线，请输入已有资料", 422);
   }
   return {
-    candidates: outlined,
+    candidates: [
+      ...usableCandidates,
+      ...outlined.filter((source) => source.origin === "USER" && source.verificationStatus === "UNAVAILABLE"),
+    ],
     bundles: ranked.bundles,
     source: ranked.source,
     searchMode: raw.some((source) => source && source.origin === "BRAVE")
@@ -138,5 +148,6 @@ module.exports = {
   buildQueries,
   normalizeUserSource,
   dedupeSources,
+  isUsableCandidate,
   searchLearningSources,
 };

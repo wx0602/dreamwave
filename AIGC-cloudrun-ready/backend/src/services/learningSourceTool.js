@@ -3,14 +3,14 @@ const curatedCatalogAdapter = require("./adapters/curatedCatalogAdapter");
 const { verifyUrl } = require("./sourceUrlSafetyService");
 
 const DirectSearchAdapter = Object.freeze({
-  async searchSources(query, preferences) {
+  async searchSources(query, preferences, context = {}) {
     const results = [];
     try {
       results.push(...await braveSearchAdapter.search(query));
     } catch (error) {
       // The caller records the fallback mode; search must remain useful without a key.
     }
-    results.push(...curatedCatalogAdapter.search(query, preferences));
+    results.push(...curatedCatalogAdapter.search(query, preferences, context));
     return results;
   },
   async fetchSourceMetadata(source) {

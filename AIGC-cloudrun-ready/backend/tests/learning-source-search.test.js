@@ -17,6 +17,7 @@ const {
   deterministicBundles,
   validateSourceBundles,
 } = require("../src/services/learningSourceRankingService");
+const curatedCatalogAdapter = require("../src/services/adapters/curatedCatalogAdapter");
 
 function response(status, body = {}) {
   return {
@@ -99,6 +100,24 @@ async function run() {
     assert.strictEqual(oneBundle.length, 1);
     const validated = validateSourceBundles({ bundles: [{ sourceIds: ["only-source", "unknown-source"] }] }, [oneSource]);
     assert.deepStrictEqual(validated[0].sourceIds, ["only-source"]);
+
+    const paid = { ...oneSource, sourceId: "paid-source", accessType: "PAID" };
+    const unknown = { ...oneSource, sourceId: "unknown-access", accessType: "UNKNOWN", caution: "价格待核实" };
+    const unavailable = { ...oneSource, sourceId: "unavailable-source", verificationStatus: "UNAVAILABLE" };
+    const freeOnly = deterministicBundles([paid, unknown], { accessPreference: "FREE_ONLY" });
+    assert.deepStrictEqual(freeOnly[0].sourceIds, ["unknown-access"], "免费偏好应排除明确付费来源并保留未知访问条件来源");
+    const injected = validateSourceBundles(
+      { bundles: [{ sourceIds: ["unavailable-source"] }] },
+      [unavailable],
+      { accessPreference: "FREE_ONLY" }
+    );
+    assert.strictEqual(injected.length, 0, "不可用来源不能通过 LLM bundle 校验");
+
+    assert(curatedCatalogAdapter.search("30 天完成 Python 入门", {}, { goalTitle: "30 天完成 Python 入门" })
+      .some((item) => item.sourceId === "catalog-python-tutorial"));
+    assert.strictEqual(curatedCatalogAdapter.search("CET-6 阅读练习", {}, { goalTitle: "CET-6 阅读练习" }).length, 0);
+    assert.strictEqual(curatedCatalogAdapter.search("学习日语", {}, { goalTitle: "学习日语" }).length, 0);
+    assert(curatedCatalogAdapter.loadCatalog().every((item) => item.verifiedAt && item.caution));
 
     await expectAppError(
       () => searchLearningSources({ title: "无来源目标", durationDays: 7 }, {

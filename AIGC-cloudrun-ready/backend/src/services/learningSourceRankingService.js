@@ -12,7 +12,8 @@ function stableBundleId(sourceIds, index) {
 }
 
 function deterministicBundles(candidates, preferences = {}) {
-  const usable = candidates.filter((source) => source && source.verificationStatus !== "UNAVAILABLE");
+  const usable = candidates.filter((source) => source && source.verificationStatus !== "UNAVAILABLE"
+    && !(preferences.accessPreference === "FREE_ONLY" && source.accessType === "PAID"));
   if (!usable.length) return [];
   const sorted = [...usable].sort((a, b) => {
     const curated = Number(b.origin === "CURATED") - Number(a.origin === "CURATED");
@@ -65,7 +66,9 @@ function deterministicBundles(candidates, preferences = {}) {
 }
 
 function validateSourceBundles(raw, candidates, preferences = {}) {
-  const validIds = new Set(candidates.map((source) => source.sourceId));
+  const usable = candidates.filter((source) => source && source.verificationStatus !== "UNAVAILABLE"
+    && !(preferences.accessPreference === "FREE_ONLY" && source.accessType === "PAID"));
+  const validIds = new Set(usable.map((source) => source.sourceId));
   const list = Array.isArray(raw && raw.bundles) ? raw.bundles : [];
   const bundles = list.map((bundle, index) => {
     const sourceIds = Array.isArray(bundle && bundle.sourceIds)
@@ -86,7 +89,7 @@ function validateSourceBundles(raw, candidates, preferences = {}) {
       recommended: Boolean(bundle.recommended),
     };
   }).filter(Boolean).slice(0, 3);
-  if (!bundles.length) return deterministicBundles(candidates, preferences);
+  if (!bundles.length) return deterministicBundles(usable, preferences);
   const recommendedIndex = bundles.findIndex((bundle) => bundle.recommended);
   bundles.forEach((bundle, index) => { bundle.recommended = recommendedIndex < 0 ? index === 0 : index === recommendedIndex; });
   return bundles;
