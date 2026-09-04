@@ -74,9 +74,24 @@ function callContainer(path, method, data) {
   return wx.cloud.callContainer(options);
 }
 
+function callLocal(path, method, data) {
+  return new Promise((resolve, reject) => {
+    wx.request({
+      url: String(cloudConfig.localBaseUrl || "http://127.0.0.1:3001").replace(/\/$/, "") + path,
+      method,
+      header: { "content-type": "application/json" },
+      data: data === undefined ? undefined : cleanData(data),
+      success: resolve,
+      fail: reject,
+    });
+  });
+}
+
 async function request(path, method = "GET", data) {
   try {
-    const result = await callContainer(path, method, data);
+    const result = cloudConfig.transport === "local" && typeof wx.request === "function"
+      ? await callLocal(path, method, data)
+      : await callContainer(path, method, data);
     return unwrap(result);
   } catch (error) {
     if (path === ROUTES.goals && /接口不存在|404/.test(String(error && error.message || ""))) {
