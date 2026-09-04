@@ -28,6 +28,14 @@ function normalizeError(error) {
   return new Error(message || "网络请求失败，请稍后重试");
 }
 
+function responseError(body, statusCode) {
+  const error = new Error((body && body.message) || `请求失败（${statusCode || "未知状态"}）`);
+  error.code = body && (typeof body.code === "string" ? body.code : body.errorCode) || "REQUEST_ERROR";
+  error.statusCode = Number(body && body.statusCode) || statusCode || 0;
+  error.details = body && (body.details === undefined ? body.data : body.details);
+  return error;
+}
+
 function cleanData(data) {
   if (!data || typeof data !== "object" || Array.isArray(data)) return data;
   const result = {};
@@ -48,7 +56,7 @@ function unwrap(result) {
     }
   }
   if (statusCode < 200 || statusCode >= 300 || !body || body.success !== true) {
-    throw new Error((body && body.message) || `请求失败（${statusCode || "未知状态"}）`);
+    throw responseError(body, statusCode);
   }
   return body.data;
 }

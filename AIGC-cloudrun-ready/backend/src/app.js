@@ -154,7 +154,7 @@ function createServer() {
           res,
           410,
           "请先完成来源选择和计划确认，再开始初始化",
-          "LEGACY_CONFIRMATION_REQUIRED"
+          "GOAL_DRAFT_REQUIRED"
         );
         return;
       }
@@ -183,7 +183,7 @@ function createServer() {
           res,
           410,
           "请先完成来源选择和计划确认，再新增长期目标",
-          "LEGACY_CONFIRMATION_REQUIRED"
+          "GOAL_DRAFT_REQUIRED"
         );
         return;
       }
@@ -205,9 +205,7 @@ function createServer() {
       }
 
       if (req.method === "POST" && pathname === API_ROUTES.goalsAdvance) {
-        const body = await parseBody(req);
-        const event = await advanceGoal(body);
-        respondSuccess(res, buildCommandResult(event, await getCurrentSessionState()), "新主线生成成功");
+        respondError(res, 410, "请先完成来源选择和计划确认，再开启新目标", "GOAL_DRAFT_REQUIRED");
         return;
       }
 

@@ -1023,10 +1023,12 @@ function buildSuccessResponse(data, message = "ok") {
 
 function buildErrorResponse(message, statusCode = 400, errorCode = "REQUEST_ERROR", details = null) {
   return {
-    code: statusCode,
+    code: errorCode,
+    statusCode,
     errorCode,
     message,
     success: false,
+    details,
     data: details,
   };
 }

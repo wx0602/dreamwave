@@ -159,9 +159,22 @@ function validateSourceBoundPlan(plan, context = {}) {
   const selectedIds = new Set(context.selectedSourceIds || []);
   const sourceById = sourceMap(context.sources || []);
   const budget = clamp(profile.dailyBudgetMinutes, 25, 480, 120);
+  const rawDays = Array.isArray(plan && plan.firstWeek) ? plan.firstWeek : [];
   if (!Array.isArray(normalized.stageGoals) || normalized.stageGoals.length < 2 || normalized.stageGoals.length > 6) issues.push("STAGE_COUNT");
   if (!Array.isArray(normalized.firstWeek) || normalized.firstWeek.length < 1 || normalized.firstWeek.length > 7) issues.push("FIRST_WEEK_COUNT");
-  normalized.firstWeek.forEach((day) => {
+  normalized.firstWeek.forEach((day, dayIndex) => {
+    const rawCore = rawDays[dayIndex] && rawDays[dayIndex].coreTask || {};
+    const rawSourceId = text(rawCore.sourceRef && rawCore.sourceRef.sourceId);
+    const rawTitle = text(rawCore.title);
+    const rawDetail = text(rawCore.detail || rawCore.description);
+    if (!rawSourceId || !selectedIds.has(rawSourceId) || !sourceById.has(rawSourceId)) issues.push(`RAW_CORE_SOURCE_DAY_${day.day}`);
+    if (/^(学习一下|继续学习|完成任务|看一看|练习一下|复习)$/i.test(rawTitle)) issues.push(`VAGUE_CORE_DAY_${day.day}`);
+    const source = sourceById.get(rawSourceId);
+    const verifiedLocator = rawCore.sourceRef && rawCore.sourceRef.locatorType !== "URL"
+      && source && (source.structure || []).some((entry) => entry.locatorLabel === text(rawCore.sourceRef.locatorLabel));
+    const hasScope = verifiedLocator || /\d+|章|节|课|页|题|段|模块|单元|章节|lesson|chapter|section|module/i.test(`${rawTitle} ${rawDetail}`);
+    const hasAction = /完成|阅读|观看|练习|编写|实现|整理|总结|分析|复述|记录|解决|制作|搭建|测试|read|watch|write|build|practice|summarize|implement|review/i.test(`${rawTitle} ${rawDetail}`);
+    if (!hasScope || !hasAction) issues.push(`CORE_NOT_SPECIFIC_DAY_${day.day}`);
     if (!day.coreTask || !day.coreTask.sourceRef) issues.push(`CORE_SOURCE_DAY_${day.day}`);
     if (day.optionalTasks.length > 2) issues.push(`OPTIONAL_COUNT_DAY_${day.day}`);
     const total = day.coreTask.estimatedMinutes + day.optionalTasks.reduce((sum, task) => sum + task.estimatedMinutes, 0);

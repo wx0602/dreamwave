@@ -7,10 +7,13 @@ const { formatDiaryTime, getDungeonState } = require("../utils/time");
 const { clone } = require("../utils/clone");
 const { getState, saveStore, replaceState } = require("../store/sessionStore");
 const { AppError } = require("../lib/errors");
+const env = require("../config/env");
 const {
   findConfirmationReceipt,
+  getGoalDraft,
   markGoalDraftConfirmed,
 } = require("../store/goalDraftStore");
+const confirmationLocks = new Map();
 const { getDraftForConfirmation } = require("./goalDraftService");
 const { buildFallbackPlan } = require("./sourceBoundPlanningService");
 const {
@@ -2906,6 +2909,9 @@ async function getCurrentSessionState() {
 async function createSession(payload) {
   const state = getState();
   const confirmedDraft = payload && payload.confirmedDraft ? payload.confirmedDraft : null;
+  if (!confirmedDraft && env.nodeEnv !== "test") {
+    throw new AppError("GOAL_DRAFT_REQUIRED", "初始化必须先确认学习来源和计划", 410);
+  }
   const draftProfile = confirmedDraft && confirmedDraft.goalProfile || {};
   const requestedRoleId = String((confirmedDraft ? draftProfile.roleId : payload.roleId) || "scholar").trim();
   const role = getRoleOrThrow(requestedRoleId);
@@ -3128,7 +3134,7 @@ async function createParallelGoalFromConfirmedDraft(draft) {
   };
 }
 
-async function confirmGoalDraft(preparedDraft, payload = {}) {
+async function confirmGoalDraftUnlocked(preparedDraft, payload = {}) {
   const draft = preparedDraft;
   const confirmationKey = String(payload.confirmationKey || "").trim();
   if (confirmationKey.length < 8 || confirmationKey.length > 120) {
@@ -3136,6 +3142,22 @@ async function confirmGoalDraft(preparedDraft, payload = {}) {
   }
   const existing = findConfirmationReceipt(draft.draftId, confirmationKey);
   if (existing && existing.event) return existing.event;
+  const currentDraft = getGoalDraft(draft.draftId);
+  if (currentDraft.status === "CONFIRMED") {
+    throw new AppError("DRAFT_ALREADY_CONFIRMED", "该学习路线已经确认", 409);
+  }
+  const existingGoal = getState().goalPortfolio && (getState().goalPortfolio.goals || [])
+    .find((goal) => goal.originDraftId === draft.draftId);
+  if (existingGoal) {
+    const recovered = {
+      tag: draft.mode === "INITIAL" ? "session.created" : "goal.created.parallel",
+      title: draft.mode === "INITIAL" ? "Agent 初始化完成" : "长期目标已加入",
+      storyText: getState().lastStory || `学习路线「${existingGoal.title}」已确认。`,
+      rewardSummary: getState().lastRewardSummary || "学习路线已确认",
+    };
+    markGoalDraftConfirmed(draft.draftId, draft.revision, { confirmationKey, goalId: existingGoal.goalId, event: recovered });
+    return recovered;
+  }
 
   let event;
   if (draft.mode === "INITIAL") {
@@ -3162,6 +3184,18 @@ async function confirmGoalDraft(preparedDraft, payload = {}) {
     event,
   });
   return event;
+}
+
+async function confirmGoalDraft(preparedDraft, payload = {}) {
+  const draftId = preparedDraft && preparedDraft.draftId;
+  const previous = confirmationLocks.get(draftId) || Promise.resolve();
+  const current = previous.catch(() => {}).then(() => confirmGoalDraftUnlocked(preparedDraft, payload));
+  confirmationLocks.set(draftId, current);
+  try {
+    return await current;
+  } finally {
+    if (confirmationLocks.get(draftId) === current) confirmationLocks.delete(draftId);
+  }
 }
 
 async function updateGoalPriority(goalId, priority) {
@@ -3647,6 +3681,9 @@ async function createTask(payload) {
 async function createParallelGoal(payload) {
   if (payload && payload.confirmedDraft) {
     return createParallelGoalFromConfirmedDraft(payload.confirmedDraft);
+  }
+  if (env.nodeEnv !== "test") {
+    throw new AppError("GOAL_DRAFT_REQUIRED", "新增长期目标必须先确认学习来源和计划", 410);
   }
   const state = getState();
   ensureInitialized(state);
@@ -4527,6 +4564,9 @@ async function useStarMapTool(payload) {
 }
 
 async function advanceGoal(payload) {
+  if (env.nodeEnv !== "test") {
+    throw new AppError("GOAL_DRAFT_REQUIRED", "开启新目标必须先确认学习来源和计划", 410);
+  }
   const state = getState();
   ensureInitialized(state);
   migrateLegacyState(state);
