@@ -12,10 +12,10 @@
       <view class="error card" wx:if="{{error}}">{{error}}</view>
       <view class="section-title">推荐路线</view>
       <view class="empty card" wx:if="{{!bundles.length}}">暂时没有形成可靠路线。你可以补充一本已经在用的资料再搜索。</view>
-      <view class="bundle-card card {{item.selected?'selected':''}}" wx:for="{{bundles}}" wx:key="bundleId" data-id="{{item.bundleId}}" bindtap="chooseBundle">
+      <view class="bundle-card card {{item.selected?'selected':''}} {{item.recommended?'recommended':'compact'}}" wx:for="{{bundles}}" wx:key="bundleId" data-id="{{item.bundleId}}" bindtap="chooseBundle">
         <view class="bundle-head"><view class="bundle-label">{{item.label}}</view><view class="bundle-check">{{item.selected?'已选':'选择'}}</view></view>
         <view class="bundle-reason">{{item.fitReason}}</view>
-        <view class="source-list"><view class="source-chip" wx:for="{{item.sources}}" wx:for-item="source" wx:key="sourceId"><view class="source-main"><text class="source-title">{{source.title}}</text><text class="source-origin">{{source.origin==='BRAVE'?'公开搜索':source.origin==='USER'?'你的资料':'精选目录'}}</text></view><view class="source-link-row" catchtap="copySource" data-url="{{source.url}}"><text class="source-url">{{source.url || '链接待补充'}}</text><text class="source-copy">复制链接</text></view></view></view>
+        <view class="source-list"><view class="source-chip" wx:for="{{item.sources}}" wx:for-item="source" wx:key="sourceId"><view class="source-main"><text class="source-title">{{source.title}}</text><text class="source-origin">{{source.origin==='BRAVE'?'公开搜索':source.origin==='USER'?'你的资料':'精选目录'}}</text></view><view class="source-link-row" wx:if="{{source.url}}" catchtap="copySource" data-url="{{source.url}}"><text class="source-url">{{source.url}}</text><text class="source-copy">复制链接</text></view><view class="source-link-row" wx:else><text class="source-url">链接待补充</text></view></view></view>
         <view class="bundle-caution" wx:if="{{item.caution}}">提示：{{item.caution}}</view>
       </view>
 

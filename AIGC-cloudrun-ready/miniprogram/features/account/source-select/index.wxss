@@ -11,6 +11,8 @@
 .bundle-label { flex:1; font-size:31rpx; font-weight:700; }
 .bundle-check { padding:8rpx 16rpx; border-radius:999rpx; color:#4f9ef0; background:#e9f5ff; font-size:22rpx; }
 .bundle-card.selected .bundle-check { color:#fff; background:#6fb6ff; }
+.bundle-card.compact:not(.selected) { padding:22rpx 26rpx; box-shadow:none; }
+.bundle-card.compact:not(.selected) .source-list { display:none; }
 .bundle-reason { margin-top:14rpx; color:#607180; line-height:1.65; }
 .source-list { display:flex; flex-direction:column; gap:12rpx; margin-top:20rpx; }
 .source-chip { display:flex; flex-direction:column; gap:10rpx; padding:18rpx 20rpx; border-radius:20rpx; background:#f5f9fd; color:#405466; font-size:25rpx; }

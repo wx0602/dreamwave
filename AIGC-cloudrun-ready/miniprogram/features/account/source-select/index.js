@@ -5,6 +5,11 @@ function text(value, fallback = "") {
   return result || fallback;
 }
 
+function friendlyError(error, fallback) {
+  const messages = { NO_RELIABLE_SOURCE: "暂时没有可靠来源，请补充你已有的资料。", DRAFT_REVISION_CONFLICT: "草稿已更新，请重新选择来源。", SOURCE_PROVIDER_UNAVAILABLE: "公开搜索暂时不可用，已尝试使用精选目录。" };
+  return messages[error && error.code] || error && error.message || fallback;
+}
+
 Page({
   data: {
     loading: true,
@@ -21,6 +26,12 @@ Page({
   onLoad(query) {
     this.mode = query && query.mode === "PARALLEL" ? "PARALLEL" : "INITIAL";
     this.load();
+  },
+
+  onShow() {
+    if (!this.loaded) return;
+    const draft = getApp().globalData.goalDraft;
+    if (draft && draft.mode === this.mode && (!this.data.draft || draft.revision !== this.data.draft.revision)) this.renderDraft(draft);
   },
 
   async load() {
@@ -49,8 +60,9 @@ Page({
       app.globalData.goalDraft = draft;
       this.renderDraft(draft);
     } catch (error) {
-      this.setData({ error: error.message || "来源搜索失败" });
+      this.setData({ error: friendlyError(error, "来源搜索失败") });
     } finally {
+      this.loaded = true;
       this.setData({ loading: false });
     }
   },
@@ -77,7 +89,8 @@ Page({
   },
 
   chooseBundle(event) {
-    this.setData({ selectedBundleId: event.currentTarget.dataset.id });
+    const selectedBundleId = event.currentTarget.dataset.id;
+    this.setData({ selectedBundleId, bundles: this.data.bundles.map((bundle) => ({ ...bundle, selected: bundle.bundleId === selectedBundleId })) });
   },
 
   copySource(event) {
@@ -111,7 +124,7 @@ Page({
       this.renderDraft(draft);
       this.setData({ userSourceTitle: "", userSourceUrl: "" });
     } catch (error) {
-      this.setData({ error: error.message || "来源搜索失败" });
+      this.setData({ error: friendlyError(error, "来源搜索失败") });
     } finally {
       this.setData({ searching: false });
     }
@@ -132,7 +145,7 @@ Page({
       getApp().globalData.goalDraft = next;
       wx.navigateTo({ url: "/features/account/plan-review/index?draftId=" + encodeURIComponent(next.draftId) });
     } catch (error) {
-      this.setData({ error: error.message || "来源选择失败" });
+      this.setData({ error: friendlyError(error, "来源选择失败") });
     } finally {
       this.setData({ searching: false });
     }

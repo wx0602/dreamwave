@@ -9,6 +9,7 @@ Page({
     timeOptions: ["30 分钟", "1 小时", "2 小时", "3 小时"],
     levelOptions: [{ value: "BEGINNER", label: "刚开始接触" }, { value: "UNSYSTEMATIC", label: "有基础但不成体系" }, { value: "SPRINT", label: "短期冲刺" }],
     sourceOptions: [{ value: "ANY", label: "让 Agent 判断" }, { value: "VIDEO", label: "视频课程" }, { value: "TEXT", label: "教材 / 文档" }, { value: "PRACTICE", label: "练习 / 项目" }],
+    accessOptions: [{ value: "FREE_ONLY", label: "仅免费" }, { value: "PAID_OK", label: "可接受付费" }, { value: "OWNED", label: "我已有资料" }],
     errors: {},
   },
   noop() {},
@@ -19,6 +20,7 @@ Page({
   timeChange(event) { this.setData({ dailyTime: this.data.timeOptions[event.detail.value] }); },
   levelChange(event) { const item = this.data.levelOptions[event.detail.value]; this.setData({ currentLevel: item.value }); },
   sourceChange(event) { const item = this.data.sourceOptions[event.detail.value]; this.setData({ sourcePreference: item.value }); },
+  accessChange(event) { const item = this.data.accessOptions[event.detail.value]; this.setData({ accessPreference: item.value }); },
   submit() {
     const title = this.data.title.trim();
     const days = Number(this.data.days);
