@@ -1201,6 +1201,9 @@ function updateDailyPlanMetrics(state) {
   state.dailyPlan.coreTaskId = tasks.find((task) => task.priorityTier === "CORE")?.id || state.dailyPlan.coreTaskId || null;
   state.dailyPlan.optionalTaskIds = tasks.filter((task) => task.priorityTier === "OPTIONAL").map((task) => task.id);
   state.dailyPlan.coreReleased = Boolean(state.dailyPlan.coreReleased || state.dailyPlan.coreTaskId);
+  if (!Number.isFinite(Number(state.dailyPlan.optionalSlotsUsed))) {
+    state.dailyPlan.optionalSlotsUsed = Math.min(PORTFOLIO_SIDE_TASKS_PER_DAY, tasks.filter((task) => task.priorityTier === "OPTIONAL").length);
+  }
   state.dailyPlan.status = tasks.length > 0 && completed.length === tasks.length ? "COMPLETED" : "ACTIVE";
   state.dailyPlan.completedAt = state.dailyPlan.status === "COMPLETED"
     ? state.dailyPlan.completedAt || new Date().toISOString()
@@ -1560,9 +1563,25 @@ function retainPendingForNextDay(state, previousPlan) {
 function scheduleGlobalDailyTasks(state, primary, secondary, planDate, dailyPlanId) {
   const generated = [];
   if (primary) generated.push(...releaseCoreTaskForGoal(state, primary, planDate, dailyPlanId));
-  const existingOptionalCount = (state.tasks || []).filter((task) => task && !task.done && task.priorityTier === "OPTIONAL").length;
-  const remaining = Math.max(0, PORTFOLIO_SIDE_TASKS_PER_DAY - existingOptionalCount);
-  if (remaining > 0) generated.push(...buildOptionalCandidates(state, primary, secondary, planDate, dailyPlanId).slice(0, remaining));
+  const storedSlots = state.dailyPlan && Number(state.dailyPlan.optionalSlotsUsed);
+  const derivedSlots = (state.tasks || []).filter((task) => task && task.dailyPlanId === dailyPlanId && task.priorityTier === "OPTIONAL").length;
+  const slotsUsed = Math.max(0, Math.min(PORTFOLIO_SIDE_TASKS_PER_DAY, Number.isFinite(storedSlots) ? storedSlots : derivedSlots));
+  let remainingSlots = PORTFOLIO_SIDE_TASKS_PER_DAY - slotsUsed;
+  const capacity = Number(state.dailyPlan && state.dailyPlan.capacityMinutes) || parseDailyMinutes(state.profile && state.profile.dailyTime, 120);
+  let remainingMinutes = capacity - [...(state.tasks || []), ...generated]
+    .filter((task) => task && task.dailyPlanId === dailyPlanId)
+    .reduce((sum, task) => sum + Number(task.estimatedMinutes || 0), 0);
+  const selected = [];
+  for (const candidate of buildOptionalCandidates(state, primary, secondary, planDate, dailyPlanId)) {
+    const minutes = Number(candidate.estimatedMinutes || 0);
+    if (remainingSlots <= 0) break;
+    if (minutes > remainingMinutes) continue;
+    selected.push(candidate);
+    remainingSlots -= 1;
+    remainingMinutes -= minutes;
+  }
+  generated.push(...selected);
+  if (state.dailyPlan) state.dailyPlan.optionalSlotsUsed = slotsUsed + selected.length;
   return generated;
 }
 
@@ -1606,6 +1625,7 @@ async function ensurePortfolioDailyPlan(state, options = {}) {
     coreReleased: state.tasks.some((task) => task.priorityTier === "CORE" && !task.done),
     coreTaskId: state.tasks.find((task) => task.priorityTier === "CORE" && !task.done)?.id || null,
     optionalTaskIds: state.tasks.filter((task) => task.priorityTier === "OPTIONAL" && !task.done).map((task) => task.id),
+    optionalSlotsUsed: Math.min(PORTFOLIO_SIDE_TASKS_PER_DAY, state.tasks.filter((task) => task.priorityTier === "OPTIONAL").length),
     source: options.source || "GOAL_PORTFOLIO",
     version: 1,
     message: "",
@@ -2647,6 +2667,15 @@ function migratePortfolioPlanningV4(state) {
     if (goal.status === "COMPLETED") goal.completedAt = goal.completedAt || new Date().toISOString();
     changed = true;
   });
+  if (changed && state.dailyPlan) {
+    (state.tasks || []).forEach((task) => {
+      if (!task.dailyPlanId) task.dailyPlanId = state.dailyPlan.id;
+    });
+    state.dailyPlan.taskIds = (state.tasks || []).filter((task) => task.dailyPlanId === state.dailyPlan.id).map((task) => task.id);
+    state.dailyPlan.optionalSlotsUsed = Math.min(PORTFOLIO_SIDE_TASKS_PER_DAY,
+      (state.tasks || []).filter((task) => task.dailyPlanId === state.dailyPlan.id && task.priorityTier === "OPTIONAL").length);
+    updateDailyPlanMetrics(state);
+  }
   state.taskHistory = (state.taskHistory || []).slice(0, 500);
   return changed;
 }
@@ -3220,6 +3249,16 @@ async function updateGoalPriority(goalId, priority) {
   } else {
     goal.priority = "INACTIVE";
   }
+  const activeGoals = goals.filter((entry) => entry && entry.status === "ACTIVE");
+  if (!activeGoals.some((entry) => entry.priority === "PRIMARY") && activeGoals.length) {
+    activeGoals[0].priority = "PRIMARY";
+  }
+  let secondarySeen = false;
+  activeGoals.forEach((entry) => {
+    if (entry.priority !== "SECONDARY") return;
+    if (secondarySeen) entry.priority = "INACTIVE";
+    secondarySeen = true;
+  });
   state.goalPortfolio.version = 2;
   // Rebuild generated optional actions immediately so a priority change is
   // reflected in today's queue. User-created actions remain untouched.
@@ -3235,6 +3274,7 @@ async function updateGoalPriority(goalId, priority) {
       state.tasks = (state.tasks || []).filter((task) => !generatedOptionalIds.has(task.id));
       state.dailyPlan.taskIds = (state.dailyPlan.taskIds || []).filter((id) => !generatedOptionalIds.has(id));
       state.dailyPlan.optionalTaskIds = (state.dailyPlan.optionalTaskIds || []).filter((id) => !generatedOptionalIds.has(id));
+      state.dailyPlan.optionalSlotsUsed = Math.max(0, Number(state.dailyPlan.optionalSlotsUsed || 0) - generatedOptionalIds.size);
     }
   }
   state.lastStory = `目标「${goal.title}」已调整为${goal.priority === "PRIMARY" ? "主目标" : goal.priority === "SECONDARY" ? "次目标" : "暂停自动发布"}。`;
@@ -3575,11 +3615,14 @@ async function createTask(payload) {
     throw new Error("支线任务内容不能为空");
   }
   const activeOptional = (state.tasks || []).filter((task) => task && !task.done && task.priorityTier === "OPTIONAL");
-  if (activeOptional.length >= PORTFOLIO_SIDE_TASKS_PER_DAY) {
+  const slotsUsed = Math.max(0, Math.min(PORTFOLIO_SIDE_TASKS_PER_DAY, Number(state.dailyPlan && state.dailyPlan.optionalSlotsUsed) || activeOptional.length));
+  let replacingSlot = false;
+  if (slotsUsed >= PORTFOLIO_SIDE_TASKS_PER_DAY) {
     const automatic = activeOptional.find((task) => task.source !== "CUSTOM");
     if (!automatic) {
-      throw new AppError("DAILY_OPTIONAL_LIMIT_REACHED", "今天的可选任务已满，请先完成一个可选任务", 409);
+      throw new AppError("DAILY_OPTIONAL_LIMIT_REACHED", "今天的可选任务名额已用完，请明天再添加", 409);
     }
+    replacingSlot = true;
     archiveUnscheduledTask(state, automatic, "OPTIONAL_REPLACED_BY_CUSTOM");
     state.tasks = (state.tasks || []).filter((task) => task.id !== automatic.id);
     if (state.dailyPlan) {
@@ -3624,6 +3667,7 @@ async function createTask(payload) {
     state.dailyPlan.taskIds = state.tasks
       .filter((task) => task.dailyPlanId === state.dailyPlan.id)
       .map((task) => task.id);
+    if (!replacingSlot) state.dailyPlan.optionalSlotsUsed = Math.min(PORTFOLIO_SIDE_TASKS_PER_DAY, slotsUsed + 1);
     updateDailyPlanMetrics(state);
   }
   refreshGoalPlanProgress(state);

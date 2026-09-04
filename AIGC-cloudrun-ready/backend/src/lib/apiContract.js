@@ -513,6 +513,7 @@ function buildDailyPlanDto(dailyPlan) {
     coreReleased: Boolean(source.coreReleased),
     coreTaskId: cleanText(source.coreTaskId),
     optionalTaskIds: Array.isArray(source.optionalTaskIds) ? [...source.optionalTaskIds] : [],
+    optionalSlotsUsed: Math.max(0, Math.min(2, toNumber(source.optionalSlotsUsed, 0))),
     source: cleanText(source.source),
     version: toNumber(source.version, 1),
     message: cleanText(source.message),

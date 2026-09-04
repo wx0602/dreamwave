@@ -97,6 +97,7 @@ async function run() {
       const goal = state.goalPortfolio.goals.find((entry) => entry.goalId === fixture.goalId);
       assert(goal, "迁移后目标必须保留");
       assert.strictEqual(rawAfterMigration.meta && rawAfterMigration.meta.version, 9);
+      assert(rawAfterMigration.dailyPlan.optionalSlotsUsed >= 0 && rawAfterMigration.dailyPlan.optionalSlotsUsed <= 2);
       assert.strictEqual(goal.planningVersion, 4);
       assert.strictEqual(goal.totalStarCount, 20);
       assert.strictEqual(goal.nodes.length, 20, "迁移后应保留完整日节点序列");

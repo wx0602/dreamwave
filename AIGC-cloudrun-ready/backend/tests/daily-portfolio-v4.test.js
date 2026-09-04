@@ -93,6 +93,16 @@ async function run() {
     assert.strictEqual(pending(state, "OPTIONAL").filter((task) => task.source === "CUSTOM").length, 2, "自定义可选任务应可跨日携带");
     assert(pending(state, "CORE").length <= 1);
 
+    const completedOptional = pending(state, "OPTIONAL")[0];
+    await completeTask(completedOptional.id);
+    state = await getCurrentSessionState();
+    assert.strictEqual(state.dailyPlan.optionalSlotsUsed, 2, "完成可选任务不应释放当天名额");
+    assert.strictEqual(pending(state, "OPTIONAL").length, 1, "完成可选任务后不得补发第三个可选任务");
+    await assert.rejects(
+      () => createTask("完成后再加一项"),
+      (error) => error instanceof AppError && error.code === "DAILY_OPTIONAL_LIMIT_REACHED"
+    );
+
     console.log("Global daily portfolio v4 tests passed.");
   } finally {
     fs.rmSync(runtimeDir, { recursive: true, force: true });
