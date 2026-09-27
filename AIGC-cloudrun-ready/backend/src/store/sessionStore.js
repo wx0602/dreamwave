@@ -13,7 +13,7 @@ function createEmptyState() {
   return {
     meta: {
       nextId: 1,
-      version: 8,
+      version: 9,
       updatedAt: new Date().toISOString(),
     },
     initialized: false,
@@ -36,7 +36,7 @@ function createEmptyState() {
     dailyPlan: null,
     dailyPlanHistory: [],
     goalPortfolio: {
-      version: 1,
+      version: 2,
       goals: [],
     },
     nextSuggestion: null,

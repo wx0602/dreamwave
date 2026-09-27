@@ -1,9 +1,16 @@
 .completion-page { display:flex; align-items:center; min-height:100vh; padding:48rpx; }
 .completion-panel { width:100%; padding:58rpx 40rpx; text-align:center; }
+.completion-symbol { display:flex; align-items:center; justify-content:center; width:110rpx; height:110rpx; margin:0 auto; border-radius:34rpx; color:#fff1b7; background:linear-gradient(145deg,#82c9ff,#6e7cdb); box-shadow:0 14rpx 28rpx rgba(79,158,240,.22); font-size:54rpx; }
 .completion-title { margin-top:36rpx; }
-.progress-row { display:flex; align-items:center; gap:18rpx; margin-top:32rpx; color:#4f9ef0; font-weight:700; }
+.summary-input { width:100%; min-height:190rpx; margin-top:30rpx; padding:24rpx; border:2rpx solid #dceeff; border-radius:24rpx; background:#f8fbff; color:#2f3440; text-align:left; line-height:1.65; }
+.summary-hint { margin-top:14rpx; color:#9aa6b2; font-size:22rpx; line-height:1.5; }
+.summary-hint { display:flex; justify-content:space-between; gap:20rpx; }
+.skip-summary { margin-top:24rpx; color:#7890a5; font-size:24rpx; }
+.summary-actions { display:flex; gap:16rpx; margin-top:30rpx; }
+.summary-actions button { flex:1; min-width:0; }
 .error { margin-top:26rpx; color:#c56565; line-height:1.6; }
 .error-actions { display:flex; gap:18rpx; margin-top:28rpx; }
 .error-actions button { flex:1; }
 .story-body { margin:30rpx 0; color:#607180; text-align:left; line-height:1.85; white-space:pre-wrap; }
 .reward { margin:0 0 32rpx; padding:24rpx; border-radius:24rpx; color:#4f9ef0; background:#eef7ff; line-height:1.7; }
+.story-toggle { margin: 12rpx 0 30rpx; color:#6c91b4; font-size:24rpx; }

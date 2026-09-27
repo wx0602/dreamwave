@@ -34,3 +34,6 @@ npm run check:miniprogram
 ```
 
 该命令检查页面四件套、JSON、JavaScript 语法、模块引用、导航目标、图片引用、Secret 特征、`callContainer` 使用和分包体积。
+# 本地联调
+
+开发者工具中可将 `config/cloud.js` 的 `transport` 设为 `local`，并先在项目根目录运行 `npm run dev:backend`。本地模式请求 `http://127.0.0.1:3001`，需要在开发者工具“详情 → 本地设置”中勾选“不校验合法域名”。真机预览或发布前必须将 `transport` 改回 `cloud`。

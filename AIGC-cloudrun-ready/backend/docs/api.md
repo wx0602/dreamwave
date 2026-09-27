@@ -23,13 +23,20 @@
 | 方法 | 路径 | 主要请求体 | 主要返回体 | 说明 |
 | :--- | :--- | :--- | :--- | :--- |
 | `GET` | `/roles` | 无 | `List<CharacterDto>` | 角色列表 |
-| `POST` | `/sessions` | `account` `password` `name` `goal` `roleId` `apiKey` | `CommandResultDto` | 注册账号、创建会话与初始主线 |
+| `POST` | `/goal-drafts` | `mode` `goalProfile` | `GoalDraftDto` | 创建首次或并行目标草稿 |
+| `GET` | `/goal-drafts/{draftId}` | 无 | `GoalDraftDto` | 恢复草稿 |
+| `POST` | `/goal-drafts/{draftId}/source-searches` | `expectedRevision` `userSources?` | `GoalDraftDto` | 搜索并核验来源 |
+| `POST` | `/goal-drafts/{draftId}/source-selections` | `expectedRevision` `bundleId` | `GoalDraftDto` | 确认来源组合 |
+| `POST` | `/goal-drafts/{draftId}/plan-generations` | `expectedRevision` `adjustment?` | `GoalDraftDto` | 生成来源绑定计划 |
+| `POST` | `/goal-drafts/{draftId}/confirmations` | `expectedRevision` `confirmationKey` `registration?` | `CommandResultDto` | 正式创建账号或目标 |
+| `POST` | `/sessions` | 旧版输入 | 错误 | 已停用，返回 410 `GOAL_DRAFT_REQUIRED` |
 | `POST` | `/session-logins` | `account` `password` | `CommandResultDto` | 登录已有账号并恢复最近一次状态 |
 | `GET` | `/sessions/current` | 无 | `AppStateDto` | 获取当前全量状态 |
 | `POST` | `/tasks` | `title` | `CommandResultDto` | 创建支线任务 |
 | `POST` | `/tasks/{taskId}/completion` | 无 | `CommandResultDto` | 完成任务并结算剧情 |
-| `POST` | `/goals` | `title` `durationDays` | `CommandResultDto` | 新建一个可并行的长期目标星图 |
-| `POST` | `/goals/advance` | `goal` | `CommandResultDto` | 当前长期目标完成后创建新目标 |
+| `POST` | `/goals` | 旧版输入 | 错误 | 已停用，返回 410 `GOAL_DRAFT_REQUIRED` |
+| `POST` | `/goals/advance` | 旧版输入 | 错误 | 已停用，返回 410 `GOAL_DRAFT_REQUIRED` |
+| `POST` | `/goals/{goalId}/priority` | `priority` | `CommandResultDto` | 设置主、次或暂停自动发布 |
 | `GET` | `/dungeons/current/status` | `demo=1` 可选 | `DungeonStatusDto` | 查询副本开启状态 |
 | `POST` | `/dungeons/current/start` | `demo` 可选 | `CommandResultDto` | 按当天学习快照进入副本 |
 | `POST` | `/dungeons/current/events` | `choiceId` | `CommandResultDto` | 推进剧情分支，不即时发正式奖励 |
@@ -76,6 +83,8 @@
 - `event.memorySummary`: 记忆摘要
 - `event.rewardSummary`: 奖励文本
 - `state`: 动作执行后的最新 `AppStateDto`
+
+错误响应中的 `code` 是业务错误码，`statusCode` 是 HTTP 状态；`errorCode` 暂作为兼容别名。小程序应按业务码分支，不解析中文消息。
 
 ## 4. 联调约束
 

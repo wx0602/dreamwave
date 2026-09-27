@@ -83,7 +83,7 @@ function collectDailyMainTasks(state) {
   }
   const taskIds = new Set(Array.isArray(dailyPlan.taskIds) ? dailyPlan.taskIds : []);
   return state.tasks.filter((task) => {
-    if (!task || task.source !== "STAGE") {
+    if (!task || (task.source !== "STAGE" && !(task.type === "main" && task.priorityTier === "CORE"))) {
       return false;
     }
     return task.dailyPlanId === dailyPlan.id || taskIds.has(task.id);

@@ -5,13 +5,12 @@ const { value, showError, eventToStory } = require("../../utils/ui");
 
 Page({
   data: {
-    loading: true, chapter: "", goal: "", tasks: [], state: null,
+    loading: true, chapter: "", goal: "", tasks: [], state: null, activeGoals: [],
     companionExpanded: false, companionName: "伴学", companionTag: "陪跑", companionImage: "", companionMessage: "正在读取今天的计划...", companionPrompts: [], companionIndex: 0,
     companionX: 0, companionY: 300, companionDockLeft: false, companionPanelBelow: false,
     inputModal: false, inputMode: "create", inputTitle: "", inputValue: "", inputTaskId: "",
     editModal: false, editTask: null, editTitle: "", editDetail: "", editMinutes: "25", editDeadline: "",
     actionModal: false, story: null,
-    goalModal: false, goalTitle: "", goalDays: "30",
   },
   onLoad() {
     const windowInfo = wx.getWindowInfo ? wx.getWindowInfo() : wx.getSystemInfoSync();
@@ -52,27 +51,37 @@ Page({
     const roleId = normalizeRoleId((state.agent && state.agent.roleId) || user.selectedRoleId || storage.get(storage.KEYS.selectedRole, "traveler"));
     const meta = ROLE_META[roleId];
     const companion = storage.get(storage.KEYS.companion, {});
-    const activeGoals = ((state.goalPortfolio && state.goalPortfolio.goals) || []).filter((goal) => goal.status === "ACTIVE");
-    const tasks = (state.tasks || []).map((task) => ({
+    const activeGoals = ((state.goalPortfolio && state.goalPortfolio.goals) || [])
+      .filter((goal) => goal.status === "ACTIVE")
+      .sort((left, right) => ({ PRIMARY: 0, SECONDARY: 1, INACTIVE: 2 }[left.priority] || 2) - ({ PRIMARY: 0, SECONDARY: 1, INACTIVE: 2 }[right.priority] || 2));
+    const rawTasks = (state.tasks || []).filter((task) => task.priorityTier === "CORE" || task.priorityTier === "OPTIONAL");
+    const tasks = rawTasks
+      .sort((left, right) => {
+        const priority = (left.priorityTier === "CORE" ? 0 : 1) - (right.priorityTier === "CORE" ? 0 : 1);
+        return priority || Number(left.done) - Number(right.done);
+      })
+      .map((task, index, list) => ({
       ...task,
       done: String(task.status).toLowerCase() === "completed",
-      typeLabel: task.taskType === "side" ? "支线" : "主线",
+      typeLabel: task.priorityTier === "OPTIONAL" ? "可选" : "核心",
+      sectionStart: index === 0 || list[index - 1].priorityTier !== task.priorityTier,
+      sourceTitle: task.sourceRef && task.sourceRef.sourceTitle || "",
+      sourceLocator: task.sourceRef && task.sourceRef.locatorLabel || "",
       deadlineText: value(task.deadlineLabel, value(task.deadlineAt).slice(0, 10)),
-      rewardText: `成长 +${Number(task.rewardGrowth) || 0} · 资源 +${Number(task.rewardResource) || 0}`,
     }));
     const companionName = value(companion.name, meta.companionName);
     const prompts = this.buildCompanionPrompts(state, roleId, companionName, tasks);
     this.setData({
-      state, tasks,
+      state, tasks, activeGoals,
       chapter: value(user.currentChapter, "新的冒险线"),
-      goal: activeGoals.length > 1 ? `并行长期目标 ${activeGoals.length} 项` : value(activeGoals[0] && activeGoals[0].title, value(user.currentGoal, "未设定")),
+      goal: activeGoals.length > 1 ? "主目标：" + value(activeGoals[0] && activeGoals[0].title, "未设定") + " · 另有 " + (activeGoals.length - 1) + " 项并行目标" : value(activeGoals[0] && activeGoals[0].title, value(user.currentGoal, "未设定")),
       companionName, companionTag: meta.companionTag, companionImage: getRoleImage(roleId),
       companionPrompts: prompts, companionIndex: 0, companionMessage: prompts[0],
     });
   },
   buildCompanionPrompts(state, roleId, name, tasks) {
     const completed = tasks.filter((task) => task.done).length;
-    const next = tasks.find((task) => !task.done);
+    const next = tasks.find((task) => !task.done && task.priorityTier === "CORE") || tasks.find((task) => !task.done);
     let greeting;
     if (completed && state.nextSuggestion) greeting = `${name}：你已经完成 ${completed} 项任务。下一步我建议：${state.nextSuggestion}`;
     else if (roleId === "knight") greeting = `${name}：先回报状态吧，我来陪你把今天的战线稳住。`;
@@ -122,10 +131,11 @@ Page({
   runAction(event) {
     const action = event.currentTarget.dataset.action;
     this.setData({ actionModal: false });
-    if (action === "create") this.setData({ inputModal: true, inputMode: "create", inputTitle: "新建支线任务", inputValue: "", inputTaskId: "" });
-    if (action === "goal") this.setData({ goalModal: true, goalTitle: "", goalDays: "30" });
-    if (action === "map" || action === "replan") wx.navigateTo({ url: "/features/adventure/goal-map/index" });
+    if (action === "create") this.setData({ inputModal: true, inputMode: "create", inputTitle: "新建可选行动", inputValue: "", inputTaskId: "" });
+    if (action === "goal") wx.navigateTo({ url: "/features/account/goal-setup/index" });
   },
+  openGoalWorkbench() { wx.navigateTo({ url: "/features/adventure/goal-map/index" }); },
+  openTodayAdjust() { wx.navigateTo({ url: "/features/adventure/goal-map/index" }); },
   closeInput() { this.setData({ inputModal: false }); },
   noop() {},
   inputChange(event) { this.setData({ inputValue: event.detail.value }); },
@@ -188,17 +198,4 @@ Page({
     if (story) this.setData({ story });
   },
   closeStory() { this.setData({ story: null }); },
-  goalInput(event) { this.setData({ [event.currentTarget.dataset.key]: event.detail.value }); },
-  closeGoal() { this.setData({ goalModal: false }); },
-  async submitGoal() {
-    const title = this.data.goalTitle.trim();
-    const days = Number(this.data.goalDays);
-    if (!title || !Number.isFinite(days) || days < 1 || days > 365) {
-      wx.showToast({ title: "请填写目标和 1—365 天期限", icon: "none" }); return;
-    }
-    this.setData({ goalModal: false, loading: true });
-    try { this.handleResult(await api.createGoal(title, Math.round(days))); }
-    catch (error) { showError(error, "长期目标创建失败"); this.setData({ goalModal: true }); }
-    finally { this.setData({ loading: false }); }
-  },
 });

@@ -19,12 +19,21 @@ const ROUTES = Object.freeze({
   currentAgent: "/api/agents/current",
   currentAgentMemories: "/api/agents/current/memories",
   purchases: "/api/purchases",
+  goalDrafts: "/api/goal-drafts",
 });
 
 function normalizeError(error) {
   if (error instanceof Error) return error;
   const message = error && (error.errMsg || error.message);
   return new Error(message || "网络请求失败，请稍后重试");
+}
+
+function responseError(body, statusCode) {
+  const error = new Error((body && body.message) || `请求失败（${statusCode || "未知状态"}）`);
+  error.code = body && (typeof body.code === "string" ? body.code : body.errorCode) || "REQUEST_ERROR";
+  error.statusCode = Number(body && body.statusCode) || statusCode || 0;
+  error.details = body && (body.details === undefined ? body.data : body.details);
+  return error;
 }
 
 function cleanData(data) {
@@ -47,7 +56,7 @@ function unwrap(result) {
     }
   }
   if (statusCode < 200 || statusCode >= 300 || !body || body.success !== true) {
-    throw new Error((body && body.message) || `请求失败（${statusCode || "未知状态"}）`);
+    throw responseError(body, statusCode);
   }
   return body.data;
 }
@@ -65,9 +74,24 @@ function callContainer(path, method, data) {
   return wx.cloud.callContainer(options);
 }
 
+function callLocal(path, method, data) {
+  return new Promise((resolve, reject) => {
+    wx.request({
+      url: String(cloudConfig.localBaseUrl || "http://127.0.0.1:3001").replace(/\/$/, "") + path,
+      method,
+      header: { "content-type": "application/json" },
+      data: data === undefined ? undefined : cleanData(data),
+      success: resolve,
+      fail: reject,
+    });
+  });
+}
+
 async function request(path, method = "GET", data) {
   try {
-    const result = await callContainer(path, method, data);
+    const result = cloudConfig.transport === "local" && typeof wx.request === "function"
+      ? await callLocal(path, method, data)
+      : await callContainer(path, method, data);
     return unwrap(result);
   } catch (error) {
     if (path === ROUTES.goals && /接口不存在|404/.test(String(error && error.message || ""))) {
@@ -85,7 +109,36 @@ module.exports = {
   createTask: (title) => request(ROUTES.tasks, "POST", { title }),
   createGoal: (title, durationDays) => request(ROUTES.goals, "POST", { title, durationDays }),
   updateTask: (taskId, payload) => request(`${ROUTES.tasks}/${encodeURIComponent(taskId)}/edits`, "POST", payload),
-  completeTask: (taskId) => request(`${ROUTES.tasks}/${encodeURIComponent(taskId)}/completion`, "POST"),
+ completeTask: (taskId, summary) => request(`${ROUTES.tasks}/${encodeURIComponent(taskId)}/completion`, "POST", {
+   summary: summary === undefined ? undefined : summary,
+ }),
+  createGoalDraft: (payload) => request(ROUTES.goalDrafts, "POST", payload),
+  getGoalDraft: (draftId) => request(`${ROUTES.goalDrafts}/${encodeURIComponent(draftId)}`),
+  searchGoalSources: (draftId, payload) => request(
+    `${ROUTES.goalDrafts}/${encodeURIComponent(draftId)}/source-searches`,
+    "POST",
+    payload
+  ),
+  selectGoalSources: (draftId, payload) => request(
+    `${ROUTES.goalDrafts}/${encodeURIComponent(draftId)}/source-selections`,
+    "POST",
+    payload
+  ),
+  generateGoalPlan: (draftId, payload) => request(
+    `${ROUTES.goalDrafts}/${encodeURIComponent(draftId)}/plan-generations`,
+    "POST",
+    payload
+  ),
+  confirmGoalDraft: (draftId, payload) => request(
+    `${ROUTES.goalDrafts}/${encodeURIComponent(draftId)}/confirmations`,
+    "POST",
+    payload
+  ),
+  updateGoalPriority: (goalId, priority) => request(
+    `${ROUTES.goals}/${encodeURIComponent(goalId)}/priority`,
+    "POST",
+    { priority }
+  ),
   advanceGoal: (goal) => request(ROUTES.goalsAdvance, "POST", { goal }),
   replanGoal: (reason, taskId, newGoal) => request(ROUTES.goalsReplan, "POST", { reason, taskId: taskId || null, newGoal: newGoal || null }),
   refreshNextSuggestion: (completedTaskId) => request(ROUTES.nextSuggestion, "POST", { completedTaskId: completedTaskId || null }),

@@ -30,14 +30,18 @@ npm run check
 
 - 角色初始化即 Agent 初始化
 - DeepSeek API Key 由云托管环境变量统一管理
-- 任务完成后写入剧情与记忆
+- 支持并行长期目标、7 天滚动规划与全局每日 1 个核心任务 + 最多 2 个可选行动
+- 任务完成后写入剧情、星图进度与分层记忆
 - 自动生成 `IDENTITY.md` 与 `MEMORY.md`
-- 最后一个主线任务完成后，自动提示输入下一阶段目标
+- 每 15 颗主线星收集一张星图，并解锁可作用于真实任务的道具
 - 预留 DeepSeek 叙事生成链路
-- 测试版关闭进程后自动清空运行缓存
+- 未配置 DeepSeek 时自动使用规则与模板降级
+- 运行状态默认保存在 `backend/runtime/`，并为账号保存状态快照
 
 ## 文档
 
+- [项目功能与架构全景](./docs/PROJECT_OVERVIEW.md)
+- [开源项目调研、产品评估与工程建议](./docs/OPEN_SOURCE_RESEARCH_AND_REVIEW.md)
 - [微信小程序运行说明](./miniprogram/README.md)
 - [后端架构](./backend/docs/architecture.md)
 - [API 汇总](./backend/docs/api.md)

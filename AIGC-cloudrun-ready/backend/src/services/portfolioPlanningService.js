@@ -1,7 +1,7 @@
-const PLANNING_VERSION = 3;
+const PLANNING_VERSION = 4;
 const ROLLING_HORIZON_DAYS = 7;
-const MAIN_TASKS_PER_DAY = 3;
-const SIDE_TASKS_PER_DAY = 2;
+const CORE_TASKS_PER_DAY = 1;
+const OPTIONAL_TASKS_PER_DAY = 2;
 
 const MAIN_ROLES = Object.freeze([
   { id: "LEARN", label: "学习输入" },
@@ -73,10 +73,11 @@ function buildPlanningBlueprint({ goalTitle, durationDays, plan }) {
       outcome: `完成「${focus.title}」`,
     };
   });
+  const firstWeek = plan && Array.isArray(plan.firstWeek) ? plan.firstWeek.map((entry) => ({ ...entry })) : [];
   const rollingDays = plan && plan.rollingTaskPlan && Array.isArray(plan.rollingTaskPlan.days)
     ? plan.rollingTaskPlan.days.map((day) => ({ ...day }))
     : [];
-  return { version: PLANNING_VERSION, goalTitle: title, durationDays: days, phases, weeklyMilestones, rollingDays };
+  return { version: PLANNING_VERSION, goalTitle: title, durationDays: days, phases, weeklyMilestones, firstWeek, rollingDays };
 }
 
 function findContext(goal, day) {
@@ -100,13 +101,12 @@ function findContext(goal, day) {
 
 function allocateMinutes(dailyBudgetMinutes) {
   const budget = clamp(dailyBudgetMinutes, 25, 480);
-  const sideEach = Math.max(5, Math.floor(budget * 0.15));
-  const mainBudget = Math.max(15, budget - sideEach * SIDE_TASKS_PER_DAY);
-  const base = Math.floor(mainBudget / MAIN_TASKS_PER_DAY);
+  const optionalEach = Math.max(5, Math.floor(budget * 0.2));
+  const coreBudget = Math.max(5, Math.min(Math.floor(budget * 0.6), budget - optionalEach * OPTIONAL_TASKS_PER_DAY));
   return {
-    sideEach,
-    main: [base, base, mainBudget - base * 2].map((minutes) => Math.max(5, minutes)),
-    mainBudget,
+    optionalEach,
+    core: coreBudget,
+    mainBudget: coreBudget,
     totalBudget: budget,
   };
 }
@@ -129,35 +129,56 @@ function actionableTitle(value, fallback) {
 }
 
 function createConcreteDomainTasks(goal, day, context, minutes) {
+  const defaultSource = Array.isArray(goal.learningSources) ? goal.learningSources[0] : null;
+  const defaultSourceRef = defaultSource ? {
+    sourceId: defaultSource.sourceId,
+    sourceTitle: defaultSource.title,
+    locatorType: "URL",
+    locatorLabel: defaultSource.title,
+    locatorUrl: defaultSource.url || "",
+    verified: false,
+  } : null;
+  const firstWeek = goal.planningBlueprint && Array.isArray(goal.planningBlueprint.firstWeek)
+    ? goal.planningBlueprint.firstWeek.find((entry) => Number(entry.day) === Number(day))
+    : null;
+  if (firstWeek && firstWeek.coreTask) {
+    return withContext([{
+      role: "LEARN",
+      roleLabel: "核心推进",
+      title: actionableTitle(firstWeek.coreTask.title, `${context.phase.title}核心任务`),
+      detail: text(firstWeek.coreTask.detail),
+      estimatedMinutes: clamp(firstWeek.coreTask.estimatedMinutes, 5, 90),
+      sourceRef: firstWeek.coreTask.sourceRef || defaultSourceRef,
+      selectionReason: text(firstWeek.coreTask.selectionReason),
+    }], goal, day, context);
+  }
   const aiDay = goal.planningBlueprint && Array.isArray(goal.planningBlueprint.rollingDays)
     ? goal.planningBlueprint.rollingDays.find((entry) => Number(entry.day) === Number(day))
     : null;
-  if (aiDay && Array.isArray(aiDay.mainTasks) && aiDay.mainTasks.length === MAIN_TASKS_PER_DAY) {
-    return withContext(aiDay.mainTasks.map((task, index) => ({
-      role: MAIN_ROLES[index].id,
-      roleLabel: MAIN_ROLES[index].label,
-      title: actionableTitle(task.title, `${context.phase.title}任务 ${index + 1}`),
+  if (aiDay && (aiDay.coreTask || Array.isArray(aiDay.mainTasks) && aiDay.mainTasks.length > 0)) {
+    const task = aiDay.coreTask || aiDay.mainTasks[0];
+    return withContext([{
+      role: "LEARN",
+      roleLabel: "核心推进",
+      title: actionableTitle(task.title, `${context.phase.title}核心任务`),
       detail: text(task.detail),
       estimatedMinutes: clamp(task.estimatedMinutes, 5, 90),
-    })), goal, day, context);
+      sourceRef: task.sourceRef || defaultSourceRef,
+      selectionReason: text(task.selectionReason),
+    }], goal, day, context);
   }
   const items = context.phase.focusItems;
-  const phaseOffset = Math.max(0, day - context.phase.startDay) * MAIN_TASKS_PER_DAY;
-  return withContext(MAIN_ROLES.map((role, index) => {
-    const item = items[Math.min(items.length - 1, phaseOffset + index)] || context.focus;
-    const titles = [
-      `列出「${item.title}」的 3 个执行要点`,
-      `完成 1 项「${item.title}」任务`,
-      `检查「${item.title}」的完成结果并记录 1 个问题`,
-    ];
-    return {
-      role: role.id,
-      roleLabel: role.label,
-      title: titles[index],
-      detail: `${text(item.detail, "按要求完成具体操作")}；保存笔记、答案、文件或截图。`,
-      estimatedMinutes: minutes.main[index],
-    };
-  }), goal, day, context);
+  const phaseOffset = Math.max(0, day - context.phase.startDay);
+  const item = items[Math.min(items.length - 1, phaseOffset)] || context.focus;
+  return withContext([{
+    role: "LEARN",
+    roleLabel: "核心推进",
+    title: `完成「${item.title}」的 1 个具体动作`,
+    detail: `${text(item.detail, "按要求完成具体操作")}；保存一个结果或未解决问题。`,
+    estimatedMinutes: minutes.core,
+    sourceRef: defaultSourceRef,
+    selectionReason: "按阶段顺序推进当前最重要的一个范围。",
+  }], goal, day, context);
 }
 
 function createDayTaskSet(goal, day) {
@@ -173,8 +194,7 @@ function normalizedFingerprint(value) {
 function validateDayTaskSet(goal, tasks) {
   const issues = [];
   const roles = new Set(tasks.map((task) => task.role));
-  if (tasks.length !== MAIN_TASKS_PER_DAY) issues.push("MAIN_TASK_COUNT");
-  if (MAIN_ROLES.some((role) => !roles.has(role.id))) issues.push("ROLE_COVERAGE");
+  if (tasks.length !== CORE_TASKS_PER_DAY) issues.push("CORE_TASK_COUNT");
   if (tasks.some((task) => !ACTION_PATTERN.test(text(task.title)))) issues.push("MISSING_ACTION");
   if (tasks.some((task) => !SPECIFICITY_PATTERN.test(`${text(task.title)} ${text(task.detail)}`))) issues.push("LOW_SPECIFICITY");
   if (tasks.some((task) => !text(task.phaseId) || !text(task.weeklyMilestoneId))) issues.push("LOW_RELEVANCE");
@@ -183,6 +203,8 @@ function validateDayTaskSet(goal, tasks) {
   if (new Set(fingerprints).size !== fingerprints.length) issues.push("DUPLICATE_TASK");
   const mainBudget = allocateMinutes(goal.dailyBudgetMinutes).totalBudget;
   if (tasks.reduce((sum, task) => sum + Number(task.estimatedMinutes || 0), 0) > mainBudget) issues.push("OVER_BUDGET");
+  if (Array.isArray(goal.learningSources) && goal.learningSources.length > 0
+    && tasks.some((task) => !task.sourceRef || !task.sourceRef.sourceId)) issues.push("MISSING_SOURCE_REF");
   return { valid: issues.length === 0, score: Math.max(0, 100 - issues.length * 15), issues };
 }
 
@@ -204,12 +226,12 @@ function planRollingHorizon(goal, fromDay, horizonDays = ROLLING_HORIZON_DAYS, o
   const checks = [];
   for (let day = startDay; day <= endDay; day += 1) {
     let nodes = (goal.nodes || []).filter((node) => Number(node.day) === day).sort((a, b) => a.slot - b.slot);
-    if (nodes.length < MAIN_TASKS_PER_DAY) {
+    if (nodes.length < CORE_TASKS_PER_DAY) {
       const existingSlots = new Set(nodes.map((node) => Number(node.slot)));
-      for (let slot = 1; slot <= MAIN_TASKS_PER_DAY; slot += 1) {
+      for (let slot = 1; slot <= CORE_TASKS_PER_DAY; slot += 1) {
         if (existingSlots.has(slot)) continue;
         const node = {
-          nodeId: `${goal.goalId}-star-${(day - 1) * MAIN_TASKS_PER_DAY + slot}`,
+          nodeId: `${goal.goalId}-core-${day}-${Math.random().toString(36).slice(2, 8)}`,
           day,
           slot,
           status: "LOCKED",
@@ -221,7 +243,7 @@ function planRollingHorizon(goal, fromDay, horizonDays = ROLLING_HORIZON_DAYS, o
       }
       nodes.sort((left, right) => left.slot - right.slot);
     }
-    if (nodes.length !== MAIN_TASKS_PER_DAY || (!overwriteAvailable && nodes.every((node) => node.planningStatus === "PLANNED"))) continue;
+    if (nodes.length !== CORE_TASKS_PER_DAY || (!overwriteAvailable && nodes.every((node) => node.planningStatus === "PLANNED"))) continue;
     const repaired = repairDayTaskSet(goal, day, createDayTaskSet(goal, day));
     repaired.tasks.forEach((task, index) => {
       const node = nodes[index];
@@ -238,6 +260,9 @@ function planRollingHorizon(goal, fromDay, horizonDays = ROLLING_HORIZON_DAYS, o
       node.phaseTitle = task.phaseTitle;
       node.weeklyMilestoneId = task.weeklyMilestoneId;
       node.weeklyMilestoneTitle = task.weeklyMilestoneTitle;
+      node.sourceRef = task.sourceRef || null;
+      node.priorityTier = "CORE";
+      node.selectionReason = task.selectionReason || "按已确认计划推进。";
     });
     checks.push({ day, ...repaired.quality });
   }
@@ -255,6 +280,7 @@ function planRollingHorizon(goal, fromDay, horizonDays = ROLLING_HORIZON_DAYS, o
     horizonEndDay: endDay,
     checkedAt: new Date().toISOString(),
   };
+  goal.plannedThroughDay = Math.max(Number(goal.plannedThroughDay || 0), endDay);
   return checks;
 }
 
@@ -314,29 +340,41 @@ function applyRollingTaskPlan(goal, rollingTaskPlan, overwriteAvailable = false)
 function buildSideTasks(goal, day) {
   const { focus } = findContext(goal, day);
   const minutes = allocateMinutes(goal.dailyBudgetMinutes);
+  const firstWeek = goal.planningBlueprint && Array.isArray(goal.planningBlueprint.firstWeek)
+    ? goal.planningBlueprint.firstWeek.find((entry) => Number(entry.day) === Number(day))
+    : null;
+  if (firstWeek && Array.isArray(firstWeek.optionalTasks)) {
+    return firstWeek.optionalTasks.slice(0, OPTIONAL_TASKS_PER_DAY).map((task, index) => ({
+      title: `第 ${day} 天：${actionableTitle(task.title, `可选行动 ${index + 1}`)}`,
+      detail: text(task.detail),
+      estimatedMinutes: clamp(task.estimatedMinutes, 5, 45),
+      taskRole: "OPTIONAL",
+      sourceRef: task.sourceRef || null,
+      selectionReason: text(task.selectionReason),
+    }));
+  }
   const aiDay = goal.planningBlueprint && Array.isArray(goal.planningBlueprint.rollingDays)
     ? goal.planningBlueprint.rollingDays.find((entry) => Number(entry.day) === Number(day))
     : null;
-  if (aiDay && Array.isArray(aiDay.sideTasks) && aiDay.sideTasks.length === SIDE_TASKS_PER_DAY) {
-    return aiDay.sideTasks.map((task, index) => ({
+  const optionalTasks = aiDay && Array.isArray(aiDay.optionalTasks)
+    ? aiDay.optionalTasks
+    : aiDay && Array.isArray(aiDay.sideTasks) ? aiDay.sideTasks : [];
+  if (optionalTasks.length > 0) {
+    return optionalTasks.slice(0, OPTIONAL_TASKS_PER_DAY).map((task, index) => ({
       title: `第 ${day} 天：${actionableTitle(task.title, `辅助任务 ${index + 1}`)}`,
       detail: text(task.detail),
       estimatedMinutes: clamp(task.estimatedMinutes, 5, 30),
       taskRole: index === 0 ? "ORGANIZE" : "REFLECT",
+      sourceRef: task.sourceRef || null,
+      selectionReason: text(task.selectionReason),
     }));
   }
   return [
     {
-      title: `第 ${day} 天：整理「${focus.title}」的完成结果`,
-      detail: `用 ${minutes.sideEach} 分钟归档今天的笔记、答案或作品。`,
-      estimatedMinutes: minutes.sideEach,
+      title: `第 ${day} 天：整理「${focus.title}」的一个结果`,
+      detail: `用 ${minutes.optionalEach} 分钟归档今天的笔记、答案或作品。`,
+      estimatedMinutes: minutes.optionalEach,
       taskRole: "ORGANIZE",
-    },
-    {
-      title: `第 ${day} 天：写下明天的第一个具体动作`,
-      detail: `用 ${minutes.sideEach} 分钟写下一个未解决问题和明天打开任务后立即执行的动作。`,
-      estimatedMinutes: minutes.sideEach,
-      taskRole: "REFLECT",
     },
   ];
 }
@@ -344,6 +382,8 @@ function buildSideTasks(goal, day) {
 module.exports = {
   PLANNING_VERSION,
   ROLLING_HORIZON_DAYS,
+  CORE_TASKS_PER_DAY,
+  OPTIONAL_TASKS_PER_DAY,
   MAIN_ROLES,
   buildPlanningBlueprint,
   createDayTaskSet,

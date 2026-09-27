@@ -31,7 +31,7 @@ function forceNextPlanningDay() {
 
 async function completeVisibleMainTasks() {
   const state = await getCurrentSessionState();
-  for (const task of state.tasks.filter((entry) => entry.type === "main" && !entry.done)) {
+  for (const task of state.tasks.filter((entry) => entry.priorityTier === "CORE" && !entry.done)) {
     await completeTask(task.id);
   }
 }
@@ -50,24 +50,21 @@ async function run() {
 
     let state = await getCurrentSessionState();
     const goal = state.goalPortfolio.goals[0];
-    assert.strictEqual(goal.constellations.length, 2, "18 颗主线星应形成两张系列星图");
+    assert.strictEqual(goal.constellations.length, 1, "六日滚动窗口应先形成一张未完成系列星图");
+    assert.strictEqual(goal.constellations[0].starCount, 6);
     for (let day = 1; day <= 5; day += 1) {
       await completeVisibleMainTasks();
       state = await getCurrentSessionState();
-      if (day < 5) {
-        forceNextPlanningDay();
-        state = await getCurrentSessionState();
-      }
+      assert.strictEqual(state.starMap.collections.length, 0, "未完成最终日节点时不得提前收录不足 15 星的星图");
+      forceNextPlanningDay();
+      state = await getCurrentSessionState();
     }
-    assert.strictEqual(state.goalPortfolio.goals[0].status, "ACTIVE", "第一张星图完成时整个长期系列仍应继续");
-    assert.strictEqual(state.starMap.collections.length, 1, "每完成一张系列星图就应立即收入图鉴");
-    assert.strictEqual(state.starMap.collections[0].starCount, 15);
-    forceNextPlanningDay();
+    assert.strictEqual(state.goalPortfolio.goals[0].status, "ACTIVE", "未完成最终日节点时长期目标仍应继续");
     await completeVisibleMainTasks();
     state = await getCurrentSessionState();
     assert.strictEqual(state.goalPortfolio.goals[0].status, "COMPLETED");
-    assert.strictEqual(state.starMap.collections.length, 2, "系列的每张完成星图都应独立收录");
-    assert(state.starMap.collections.some((entry) => entry.starCount === 3), "最后不足 15 颗的星图也应正常收录");
+    assert.strictEqual(state.starMap.collections.length, 1, "目标完成时应收录最终不足 15 星的系列星图");
+    assert.strictEqual(state.starMap.collections[0].starCount, 6);
     const cloak = state.starMap.tools["focus-cloak"];
     assert(cloak && cloak.charges === 1, "第一个星宿应奖励一次专注披风");
     const publicState = buildAppState(state);
@@ -75,12 +72,12 @@ async function run() {
     assert(publicState.starMap.collections[0].title.includes(goal.title));
 
     state = await getCurrentSessionState();
-    assert.strictEqual(state.starMap.collections.length, 2, "重复读取状态不得重复收录星宿");
+    assert.strictEqual(state.starMap.collections.length, 1, "重复读取状态不得重复收录星宿");
     assert.strictEqual(state.starMap.tools["focus-cloak"].charges, 1);
 
     await createTask("整理星图测试笔记");
     state = await getCurrentSessionState();
-    const pending = state.tasks.find((task) => task.type === "side" && !task.done);
+    const pending = state.tasks.find((task) => task.priorityTier === "OPTIONAL" && !task.done);
     assert(pending, "应存在可使用专注道具的任务");
     const diaryCount = state.diary.length;
     const focusResult = await useStarMapTool({ toolId: "focus-cloak", taskId: pending.id });

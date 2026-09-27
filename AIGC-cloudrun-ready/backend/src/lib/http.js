@@ -22,13 +22,26 @@ function handleCors(req, res) {
   return true;
 }
 
-function parseBody(req) {
+const { AppError } = require("./errors");
+
+function parseBody(req, options = {}) {
+  const maxBytes = Number(options.maxBytes) || 64 * 1024;
   return new Promise((resolve, reject) => {
     let body = "";
+    let bytes = 0;
+    let settled = false;
     req.on("data", (chunk) => {
+      bytes += Buffer.byteLength(chunk);
+      if (bytes > maxBytes) {
+        settled = true;
+        reject(new AppError("REQUEST_TOO_LARGE", "请求体过大", 413));
+        req.destroy();
+        return;
+      }
       body += chunk.toString();
     });
     req.on("end", () => {
+      if (settled) return;
       if (!body) {
         resolve({});
         return;
@@ -37,10 +50,12 @@ function parseBody(req) {
       try {
         resolve(JSON.parse(body));
       } catch (error) {
-        reject(new Error("请求体不是合法的 JSON"));
+        reject(new AppError("INVALID_JSON", "请求体不是合法的 JSON", 400));
       }
     });
-    req.on("error", reject);
+    req.on("error", (error) => {
+      if (!settled) reject(error);
+    });
   });
 }
 

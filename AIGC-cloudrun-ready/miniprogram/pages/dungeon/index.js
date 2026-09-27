@@ -79,26 +79,26 @@ function buildInitialGoalFallback(state) {
   const durationDays = parseDurationDays(user.deadline, 30);
   const templates = ((plan && plan.stageGoals) || []).reduce((all, stage) => all.concat(stage.tasks || []), []);
   const completed = templates.filter((task) => String(task.status || "").toUpperCase() === "DONE");
-  const pendingTask = (state.tasks || []).find((task) => String(task.status).toLowerCase() !== "completed" && task.taskType !== "side");
-  const totalStarCount = durationDays * 3;
+  const pendingTask = (state.tasks || []).find((task) => String(task.status).toLowerCase() !== "completed" && task.priorityTier === "CORE");
+  const totalStarCount = durationDays;
   const completedStars = Math.min(completed.length, totalStarCount);
-  const completedDays = Math.floor(completedStars / 3);
+  const completedDays = completedStars;
   const goal = {
     goalId: "initial-goal-fallback",
     title,
-    description: `每天完成 3 个主线任务，${durationDays} 天共点亮 ${totalStarCount} 颗星。`,
+    description: `每天完成 1 个核心任务，${durationDays} 天共点亮 ${totalStarCount} 颗星。`,
     durationDays,
     completedDays,
     completedStars,
     totalStarCount,
-    starsPerDay: 3,
+    starsPerDay: 1,
     status: completedStars >= totalStarCount ? "COMPLETED" : "ACTIVE",
     constellationId: "ursa-major",
     constellationName: "大熊座",
     synthetic: true,
-    nodes: Array.from({ length: Math.min(durationDays, 7) * 3 }, (_, index) => {
-      const day = Math.floor(index / 3) + 1;
-      const slot = index % 3 + 1;
+    nodes: Array.from({ length: Math.min(durationDays, 7) }, (_, index) => {
+      const day = index + 1;
+      const slot = 1;
       const templateIndex = Math.min(
         Math.max(0, templates.length - 1),
         Math.floor((day - 1) * Math.max(templates.length, 1) / Math.min(durationDays, 7))
@@ -106,16 +106,12 @@ function buildInitialGoalFallback(state) {
       const template = templates[templateIndex] || {};
       const isDone = index < completedStars;
       const isToday = !isDone && day === completedDays + 1 && Boolean(pendingTask);
-      const cet6Titles = [
-        `背诵 100 个六级核心词汇（第 ${(day - 1) * 100 + 1}—${day * 100} 个）`,
-        `精听 1 篇六级真题听力（第 ${day} 篇）`,
-        "完成 1 篇六级作文",
-      ];
+      const cet6Titles = [`完成第 ${day} 天的核心学习动作`];
       const generatedTitle = /六级|cet[-\s]?6/i.test(title)
         ? cet6Titles[slot - 1]
         : (isToday ? pendingTask.title : template.title || "完成一项具体任务");
       return {
-        nodeId: `initial-goal-fallback-star-${index + 1}`,
+        nodeId: `initial-goal-fallback-core-${index + 1}`,
         day,
         slot,
         title: `第 ${day} 天：${generatedTitle}`,
@@ -132,7 +128,7 @@ function buildInitialGoalFallback(state) {
     const shape = getConstellation(constellationId);
     const start = index * SERIES_MAP_SIZE;
     const starCount = Math.min(SERIES_MAP_SIZE, totalStarCount - start);
-    const nodeIds = Array.from({ length: starCount }, (_, nodeIndex) => `initial-goal-fallback-star-${start + nodeIndex + 1}`);
+    const nodeIds = Array.from({ length: starCount }, (_, nodeIndex) => `initial-goal-fallback-core-${start + nodeIndex + 1}`);
     const nodes = nodeIds.map((nodeId) => goal.nodes.find((node) => node.nodeId === nodeId)).filter(Boolean);
     const completedMapStars = nodes.filter((node) => node.status === "DONE").length;
     return {
@@ -156,7 +152,6 @@ Page({
     constellationName: "", constellationLatin: "", majorStars: [], lines: [], dailyStars: [],
     todayTask: null, companionStars: [], atlas: [], tools: [],
     starDetail: null, atlasDetail: null, toolModal: false, selectedTool: null, toolTargets: [], story: null,
-    goalModal: false, goalTitle: "", goalDays: "30",
   },
 
   onShow() {
@@ -204,8 +199,8 @@ Page({
         const globalIndex = (Number(map.order || 1) - 1) * SERIES_MAP_SIZE + mapIndex;
         return {
           nodeId,
-          day: Math.floor(globalIndex / 3) + 1,
-          slot: globalIndex % 3 + 1,
+          day: globalIndex + 1,
+          slot: 1,
           title: "尚未进入七日规划",
           detail: "这是一颗已预留的星位。接近执行日期后，系统才会生成对应任务。",
           estimatedMinutes: 0,
@@ -223,7 +218,7 @@ Page({
     const sky = buildSky(activeMap);
     const todayTask = activeGoal
       ? (state.tasks || []).find((task) => (
-          (activeGoal.synthetic ? task.taskType !== "side" : task.portfolioGoalId === activeGoal.goalId)
+          (activeGoal.synthetic ? task.priorityTier === "CORE" : task.portfolioGoalId === activeGoal.goalId && task.priorityTier === "CORE")
           && String(task.status).toLowerCase() !== "completed"
         )) || null
       : null;
@@ -262,21 +257,7 @@ Page({
   showAtlas(event) { const entry = this.data.atlas[Number(event.currentTarget.dataset.index)]; if (entry) this.setData({ atlasDetail: entry }); },
   closeAtlas() { this.setData({ atlasDetail: null }); },
 
-  openGoal() { this.setData({ goalModal: true, goalTitle: "", goalDays: "30" }); },
-  closeGoal() { this.setData({ goalModal: false }); },
-  goalInput(event) { this.setData({ [event.currentTarget.dataset.key]: event.detail.value }); },
-  async submitGoal() {
-    const title = this.data.goalTitle.trim();
-    const days = Number(this.data.goalDays);
-    if (!title || !Number.isFinite(days) || days < 1 || days > 365) { wx.showToast({ title: "请填写目标和 1—365 天期限", icon: "none" }); return; }
-    this.setData({ loading: true, goalModal: false });
-    try {
-      const result = await api.createGoal(title, Math.round(days));
-      if (result.state) { getApp().globalData.state = result.state; const newest = (result.state.goalPortfolio.goals || []).slice(-1)[0]; this.render(result.state, newest && newest.goalId, ""); }
-      const story = eventToStory(result.event, "长期目标已加入"); if (story) this.setData({ story });
-    } catch (error) { showError(error, "长期目标创建失败"); }
-    finally { this.setData({ loading: false }); }
-  },
+  openGoal() { wx.navigateTo({ url: "/features/account/goal-setup/index" }); },
 
   openTool(event) {
     const tool = this.data.tools[Number(event.currentTarget.dataset.index)];
