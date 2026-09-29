@@ -103,7 +103,7 @@ function fallbackTaskNarrative({ task, agent, profile, allMainDone, triggeredSki
 
 function fallbackSideQuestNarrative({ title, storyAsset }) {
   const assetText = storyAsset && storyAsset.name ? `，并以「${storyAsset.name}」作为本次支线的冒险意象` : "";
-  return `AI Agent 已将“${title}”包装为一段支线冒险${assetText}，完成后会单独写入角色记忆。`;
+  return `“${title}”已成为一段支线冒险${assetText}，完成后会单独写入角色记忆。`;
 }
 
 function fallbackChapterFinale({ role, profile, chapterTitle, taskSummaries, worldEntities }) {

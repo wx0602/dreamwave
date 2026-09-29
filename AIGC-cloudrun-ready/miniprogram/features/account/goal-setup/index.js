@@ -8,7 +8,7 @@ Page({
     accessPreference: "FREE_ONLY",
     timeOptions: ["30 分钟", "1 小时", "2 小时", "3 小时"],
     levelOptions: [{ value: "BEGINNER", label: "刚开始接触" }, { value: "UNSYSTEMATIC", label: "有基础但不成体系" }, { value: "SPRINT", label: "短期冲刺" }],
-    sourceOptions: [{ value: "ANY", label: "让 Agent 判断" }, { value: "VIDEO", label: "视频课程" }, { value: "TEXT", label: "教材 / 文档" }, { value: "PRACTICE", label: "练习 / 项目" }],
+    sourceOptions: [{ value: "ANY", label: "由系统推荐" }, { value: "VIDEO", label: "视频课程" }, { value: "TEXT", label: "教材 / 文档" }, { value: "PRACTICE", label: "练习 / 项目" }],
     accessOptions: [{ value: "FREE_ONLY", label: "仅免费" }, { value: "PAID_OK", label: "可接受付费" }, { value: "OWNED", label: "我已有资料" }],
     errors: {},
   },

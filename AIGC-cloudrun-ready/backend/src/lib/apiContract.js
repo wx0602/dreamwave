@@ -259,6 +259,13 @@ function buildSourceBundleDto(bundle) {
 function buildSourceBoundPlanDto(plan) {
   const value = asObject(plan);
   if (!value) return null;
+  const buildPlanTask = (task) => task ? {
+    title: cleanText(task.title),
+    detail: cleanText(task.detail),
+    estimatedMinutes: toNumber(task.estimatedMinutes, 0),
+    sourceRef: buildSourceRefDto(task.sourceRef),
+    selectionReason: cleanText(task.selectionReason),
+  } : null;
   return {
     version: toNumber(value.version, 1),
     goalTitle: cleanText(value.goalTitle),
@@ -270,23 +277,21 @@ function buildSourceBoundPlanDto(plan) {
       endDay: toNumber(stage && stage.endDay, 0),
       sourceIds: Array.isArray(stage && stage.sourceIds) ? stage.sourceIds.map(cleanText).filter(Boolean) : [],
     })) : [],
-    firstWeek: Array.isArray(value.firstWeek) ? value.firstWeek.map((day) => ({
-      day: toNumber(day && day.day, 0),
-      coreTask: day && day.coreTask ? {
-        title: cleanText(day.coreTask.title),
-        detail: cleanText(day.coreTask.detail),
-        estimatedMinutes: toNumber(day.coreTask.estimatedMinutes, 0),
-        sourceRef: buildSourceRefDto(day.coreTask.sourceRef),
-        selectionReason: cleanText(day.coreTask.selectionReason),
-      } : null,
-      optionalTasks: Array.isArray(day && day.optionalTasks) ? day.optionalTasks.map((task) => ({
-        title: cleanText(task && task.title),
-        detail: cleanText(task && task.detail),
-        estimatedMinutes: toNumber(task && task.estimatedMinutes, 0),
-        sourceRef: buildSourceRefDto(task && task.sourceRef),
-        selectionReason: cleanText(task && task.selectionReason),
-      })) : [],
-    })) : [],
+    firstWeek: Array.isArray(value.firstWeek) ? value.firstWeek.map((day) => {
+      const mainTasks = Array.isArray(day && day.mainTasks)
+        ? day.mainTasks.map(buildPlanTask).filter(Boolean)
+        : day && day.coreTask ? [buildPlanTask(day.coreTask)] : [];
+      const sideTasks = Array.isArray(day && day.sideTasks)
+        ? day.sideTasks.map(buildPlanTask).filter(Boolean)
+        : Array.isArray(day && day.optionalTasks) ? day.optionalTasks.map(buildPlanTask).filter(Boolean) : [];
+      return {
+        day: toNumber(day && day.day, 0),
+        mainTasks,
+        sideTasks,
+        coreTask: mainTasks[0] || null,
+        optionalTasks: sideTasks,
+      };
+    }) : [],
     weeklyMilestones: Array.isArray(value.weeklyMilestones) ? value.weeklyMilestones.map((milestone) => ({
       week: toNumber(milestone && milestone.week, 0),
       title: cleanText(milestone && milestone.title),
@@ -295,6 +300,7 @@ function buildSourceBoundPlanDto(plan) {
     totalEstimatedMinutesFirstWeek: toNumber(value.totalEstimatedMinutesFirstWeek, 0),
     generatedAt: cleanText(value.generatedAt),
     source: cleanText(value.source),
+    sourceMode: cleanText(value.sourceMode),
     planWarnings: Array.isArray(value.planWarnings) ? value.planWarnings.map(cleanText).filter(Boolean) : [],
   };
 }
@@ -324,6 +330,7 @@ function buildGoalDraftDto(draft) {
     sourceBundles: Array.isArray(value.sourceBundles) ? value.sourceBundles.map(buildSourceBundleDto) : [],
     selectedBundleId: cleanText(value.selectedBundleId),
     selectedSourceIds: Array.isArray(value.selectedSourceIds) ? value.selectedSourceIds.map(cleanText).filter(Boolean) : [],
+    sourceSelectionSkipped: value.selectedBundleId === "SKIPPED",
     planDraft: buildSourceBoundPlanDto(value.planDraft),
     planWarnings: Array.isArray(value.planWarnings) ? value.planWarnings.map(cleanText).filter(Boolean) : [],
     searchMode: cleanText(value.searchMode),
@@ -505,6 +512,8 @@ function buildDailyPlanDto(dailyPlan) {
     capacityMinutes: toNumber(source.capacityMinutes, 0),
     taskIds: Array.isArray(source.taskIds) ? [...source.taskIds] : [],
     coreReleased: Boolean(source.coreReleased),
+    coreReleasedCount: Math.max(0, Math.min(3, toNumber(source.coreReleasedCount, 0))),
+    coreTaskIds: Array.isArray(source.coreTaskIds) ? [...source.coreTaskIds] : [],
     coreTaskId: cleanText(source.coreTaskId),
     optionalTaskIds: Array.isArray(source.optionalTaskIds) ? [...source.optionalTaskIds] : [],
     optionalSlotsUsed: Math.max(0, Math.min(2, toNumber(source.optionalSlotsUsed, 0))),
@@ -893,6 +902,7 @@ function buildCommandResult(event, statePayload) {
   return {
     event: buildEventDto(event),
     state: buildAppState(statePayload),
+    sessionToken: cleanText(event && event.sessionToken),
   };
 }
 

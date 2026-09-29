@@ -20,7 +20,7 @@
 - **运行环境**: Node.js 16.x+
 - **核心框架**: 原生 HTTP Server
 - **静态配置层**: YAML Front-matter + Markdown
-- **运行时存储层**: JSON + Markdown
+- **运行时存储层**: 生产环境 MySQL 事务状态；本地 JSON 回退；Markdown 为可重建派生物
 - **AI 能力**: DeepSeek-V3，可自动降级
 
 ## 3. 核心模块

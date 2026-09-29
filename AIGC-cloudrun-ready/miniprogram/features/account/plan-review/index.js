@@ -20,6 +20,7 @@ Page({
     sources: [],
     firstWeek: [],
     milestones: [],
+    sourcesSkipped: false,
     adjustment: "",
   },
 
@@ -39,7 +40,7 @@ Page({
       if (!draft || draft.draftId !== this.draftId) draft = await api.getGoalDraft(this.draftId);
       getApp().globalData.goalDraft = draft;
       this.renderDraft(draft);
-      if (draft.status === "SOURCE_SELECTED") await this.generate();
+      if (draft.status === "SOURCE_SELECTED" || draft.status === "SOURCE_SKIPPED") await this.generate();
       else if (draft.status !== "PLAN_READY") this.setData({ error: "请先完成来源选择。" });
     } catch (error) {
       this.setData({ error: error.message || "计划加载失败" });
@@ -52,19 +53,21 @@ Page({
     const selectedIds = draft.selectedSourceIds || [];
     const sources = (draft.sourceCandidates || []).filter((source) => selectedIds.includes(source.sourceId));
     const plan = draft.planDraft || {};
+    const sourcesSkipped = Boolean(draft.sourceSelectionSkipped || draft.status === "SOURCE_SKIPPED" || draft.selectedBundleId === "SKIPPED");
     const firstWeek = (plan.firstWeek || []).map((day) => ({
       ...day,
-      optionalTasks: (day.optionalTasks || []).slice(0, 2),
-      coreTask: day.coreTask ? {
-        ...day.coreTask,
-        sourceTitle: day.coreTask.sourceRef && day.coreTask.sourceRef.sourceTitle || "已选来源",
-      } : null,
+      mainTasks: (day.mainTasks || (day.coreTask ? [day.coreTask] : [])).slice(0, 3).map((task) => ({
+        ...task,
+        sourceTitle: task.sourceRef && task.sourceRef.sourceTitle || (sourcesSkipped ? "暂未绑定资料" : "已选来源"),
+      })),
+      sideTasks: (day.sideTasks || day.optionalTasks || []).slice(0, 2),
     }));
     this.setData({
       draft,
       sources,
       firstWeek,
       milestones: plan.weeklyMilestones || [],
+      sourcesSkipped,
     });
   },
 

@@ -55,19 +55,19 @@ async function run() {
     assert.strictEqual(state.goalPortfolio.goals.length, 1, "初始长期目标应创建一张星图");
     const firstGoal = state.goalPortfolio.goals[0];
     assert.strictEqual(firstGoal.durationDays, 30, "30 天目标必须有 30 个日节点");
-    assert.strictEqual(firstGoal.totalStarCount, 30, "30 天星图应预留 30 个核心星位");
-    assert.strictEqual(firstGoal.nodes.length, 7, "首次只应生成包含今天在内的 7 天详细任务");
+    assert.strictEqual(firstGoal.totalStarCount, 90, "30 天星图应预留 90 个主线星位");
+    assert.strictEqual(firstGoal.nodes.length, 21, "首次只应生成包含今天在内的 7 天详细任务，每天三个");
     assert.strictEqual(Math.max(...firstGoal.nodes.map((node) => node.day)), 7, "第 8 天以后不得提前生成任务");
-    assert.strictEqual(firstGoal.planningVersion, 4, "长期目标应使用来源绑定滚动规划版本");
+    assert.strictEqual(firstGoal.planningVersion, 5, "长期目标应使用 3+2 滚动规划版本");
     assert(firstGoal.planningBlueprint.phases.length >= 2, "应先生成阶段层级");
     assert.strictEqual(firstGoal.planningBlueprint.weeklyMilestones.length, 5, "30 天目标应生成 5 个周里程碑");
     assert.strictEqual(firstGoal.planningQuality.status, "PASSED", "七日任务必须通过质量门禁");
     assert(firstGoal.nodes.every((node) => node.qualityScore >= 85), "详细任务必须达到最低质量分");
-    assert.strictEqual(firstGoal.constellations.length, 1, "滚动窗口内的 7 颗星应先形成一张未完成星图");
+    assert.strictEqual(firstGoal.constellations.length, 4, "滚动窗口应按星座真实形态容量分图，而非固定 15 颗");
     assert.strictEqual(firstGoal.constellations[0].starCount, 7);
-    assert.strictEqual(pendingGoalTasks(state, firstGoal.goalId).length, 1, "当天只应释放一个核心星点");
-    assert.strictEqual(firstGoal.nodes.filter((node) => node.status === "AVAILABLE").length, 1);
-    assert(state.tasks.filter((task) => task.priorityTier === "OPTIONAL").length <= 2, "全局可选任务不得超过两个");
+    assert.strictEqual(pendingGoalTasks(state, firstGoal.goalId).length, 3, "当天应释放三个主线星点");
+    assert.strictEqual(firstGoal.nodes.filter((node) => node.status === "AVAILABLE").length, 3);
+    assert.strictEqual(state.tasks.filter((task) => task.priorityTier === "OPTIONAL").length, 2, "全局应发布两个支线任务");
 
     for (const task of pendingGoalTasks(state, firstGoal.goalId)) await completeTask(task.id);
     state = await getCurrentSessionState();
@@ -82,16 +82,16 @@ async function run() {
     state = await getCurrentSessionState();
     assert.strictEqual(state.goalPortfolio.goals.length, 2, "应允许并行添加其他长期目标");
     const secondGoal = state.goalPortfolio.goals[1];
-    assert.strictEqual(secondGoal.constellations.length, 1, "并行目标首次只建立滚动窗口内的一张星图");
+    assert(secondGoal.constellations.length > 1, "并行目标应按不同星座形态容量拆分滚动窗口");
     assert.notStrictEqual(firstGoal.constellationId, secondGoal.constellationId, "并行目标应分配独立星宿");
     assert.strictEqual(pendingGoalTasks(state, firstGoal.goalId).length, 0, "添加新目标不得重新释放旧目标节点");
     assert.strictEqual(pendingGoalTasks(state, secondGoal.goalId).length, 0, "未被设为次目标的并行目标不应自动发布核心任务");
-    assert(state.tasks.filter((task) => task.priorityTier === "CORE" && !task.done).length <= 1, "并行目标不得同时发布多个核心任务");
+    assert.strictEqual(state.tasks.filter((task) => task.priorityTier === "CORE" && !task.done).length, 0, "同日完成三个主线后不得补发");
 
     forceNextPlanningDay();
     state = await getCurrentSessionState();
-    assert.strictEqual(pendingGoalTasks(state, firstGoal.goalId).length, 1, "次日应释放第一个目标的一个核心任务");
-    assert.strictEqual(pendingGoalTasks(state, secondGoal.goalId).length, 0, "暂停发布的并行目标次日仍不应自动发布核心任务");
+    assert.strictEqual(pendingGoalTasks(state, firstGoal.goalId).length, 2, "次日主目标应获得两个主线任务");
+    assert.strictEqual(pendingGoalTasks(state, secondGoal.goalId).length, 1, "次目标应获得一个主线任务");
     assert.strictEqual(
       state.goalPortfolio.goals[0].nodes.find((node) => node.status === "AVAILABLE").day,
       2,
@@ -105,7 +105,7 @@ async function run() {
 
     for (const task of pendingGoalTasks(state, firstGoal.goalId)) await completeTask(task.id);
     state = await getCurrentSessionState();
-    assert.strictEqual(state.goalPortfolio.goals[0].completedDays, 2, "完成两天只应记录 2/30 进度");
+    assert.strictEqual(state.goalPortfolio.goals[0].completedDays, 1, "第二天尚有一个主线节点未完成时不得计为完整一天");
     assert.strictEqual(state.goalPortfolio.goals[0].status, "ACTIVE", "2/30 的长期目标必须仍在进行中");
     assert.strictEqual(state.transition.needsNewGoalPrompt, false, "完成两天后也不得索要下一个长期目标");
     assert.strictEqual(pendingGoalTasks(state, firstGoal.goalId).length, 0, "第 3 天节点必须等到再次跨天刷新");

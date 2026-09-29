@@ -4,6 +4,7 @@ const path = require("path");
 const env = require("../config/env");
 const { clone } = require("../utils/clone");
 const { AppError } = require("../lib/errors");
+const { getRequestContext } = require("../context/requestContext");
 
 const draftFile = path.join(env.runtimeDir, "goal-drafts.json");
 let store = null;
@@ -17,17 +18,25 @@ function ensureRuntimeDir() {
 }
 
 function pruneDrafts(now = new Date()) {
+  const context = getRequestContext();
+  const activeStore = context ? context.draftStore : store;
+  if (!activeStore) return false;
   const timestamp = new Date(now).getTime();
-  const before = store.drafts.length;
-  store.drafts = store.drafts.filter((draft) => {
+  const before = activeStore.drafts.length;
+  activeStore.drafts = activeStore.drafts.filter((draft) => {
     const expiresAt = new Date(draft.expiresAt || 0).getTime();
     return Number.isFinite(expiresAt) && expiresAt > timestamp
       || (draft.status === "CONFIRMED" && new Date(draft.confirmedAt || 0).getTime() > timestamp - 86400000);
   });
-  return before !== store.drafts.length;
+  return before !== activeStore.drafts.length;
 }
 
 function save() {
+  const context = getRequestContext();
+  if (context) {
+    context.draftsDirty = true;
+    return;
+  }
   ensureRuntimeDir();
   const tempFile = `${draftFile}.${process.pid}.${crypto.randomBytes(4).toString("hex")}.tmp`;
   fs.writeFileSync(tempFile, JSON.stringify(store, null, 2), "utf8");
@@ -42,6 +51,11 @@ function save() {
 }
 
 function load() {
+  const context = getRequestContext();
+  if (context) {
+    if (!context.draftStore) context.draftStore = emptyStore();
+    return context.draftStore;
+  }
   if (store) return store;
   ensureRuntimeDir();
   if (!fs.existsSync(draftFile)) {
@@ -157,6 +171,12 @@ function markGoalDraftConfirmed(draftId, expectedRevision, receipt) {
 }
 
 function resetDraftStore() {
+  const context = getRequestContext();
+  if (context) {
+    context.draftStore = emptyStore();
+    context.draftsDirty = true;
+    return;
+  }
   store = emptyStore();
   save();
 }

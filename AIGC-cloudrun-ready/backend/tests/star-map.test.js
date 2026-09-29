@@ -50,12 +50,13 @@ async function run() {
 
     let state = await getCurrentSessionState();
     const goal = state.goalPortfolio.goals[0];
-    assert.strictEqual(goal.constellations.length, 1, "六日滚动窗口应先形成一张未完成系列星图");
-    assert.strictEqual(goal.constellations[0].starCount, 6);
+    assert.strictEqual(goal.constellations.length, 3, "六日的 18 个星位应按星座形态容量拆分");
+    assert.deepStrictEqual(goal.constellations.map((map) => map.starCount), [7, 8, 3]);
     for (let day = 1; day <= 5; day += 1) {
       await completeVisibleMainTasks();
       state = await getCurrentSessionState();
-      assert.strictEqual(state.starMap.collections.length, 0, "未完成最终日节点时不得提前收录不足 15 星的星图");
+      const expectedCollections = day < 3 ? 0 : day < 5 ? 1 : 2;
+      assert.strictEqual(state.starMap.collections.length, expectedCollections, "完整点亮一个真实星座形态后应立即收录一次");
       forceNextPlanningDay();
       state = await getCurrentSessionState();
     }
@@ -63,8 +64,8 @@ async function run() {
     await completeVisibleMainTasks();
     state = await getCurrentSessionState();
     assert.strictEqual(state.goalPortfolio.goals[0].status, "COMPLETED");
-    assert.strictEqual(state.starMap.collections.length, 1, "目标完成时应收录最终不足 15 星的系列星图");
-    assert.strictEqual(state.starMap.collections[0].starCount, 6);
+    assert.strictEqual(state.starMap.collections.length, 3, "目标完成时应收录最后一张不足容量的星图");
+    assert(state.starMap.collections.some((entry) => entry.starCount === 3));
     const cloak = state.starMap.tools["focus-cloak"];
     assert(cloak && cloak.charges === 1, "第一个星宿应奖励一次专注披风");
     const publicState = buildAppState(state);
@@ -72,7 +73,7 @@ async function run() {
     assert(publicState.starMap.collections[0].title.includes(goal.title));
 
     state = await getCurrentSessionState();
-    assert.strictEqual(state.starMap.collections.length, 1, "重复读取状态不得重复收录星宿");
+    assert.strictEqual(state.starMap.collections.length, 3, "重复读取状态不得重复收录星宿");
     assert.strictEqual(state.starMap.tools["focus-cloak"].charges, 1);
 
     await createTask("整理星图测试笔记");

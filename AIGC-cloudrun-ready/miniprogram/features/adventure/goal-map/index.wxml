@@ -18,7 +18,7 @@
     </scroll-view>
 
     <view class="empty-state card" wx:if="{{!activeGoal}}">
-      <view class="empty-star">✦</view><view class="empty-title">还没有长期目标</view><view class="empty-copy">创建目标后，Agent 会先搜索来源，再把计划交给你确认。</view><button class="primary-button small-button" bindtap="openGoal">创建长期目标</button>
+      <view class="empty-star">✦</view><view class="empty-title">还没有长期目标</view><view class="empty-copy">创建目标后，可以先挑选学习来源，也可以跳过资料并直接确认计划。</view><button class="primary-button small-button" bindtap="openGoal">创建长期目标</button>
     </view>
 
     <block wx:else>

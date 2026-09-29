@@ -31,12 +31,13 @@ function run() {
   assert.strictEqual(blueprint.weeklyMilestones.length, 5);
 
   initializeGoalPlanning(goal, plan, 60);
-  assert.strictEqual(goal.nodes.length, 7, "初始化只能生成 7 天核心节点");
+  assert.strictEqual(goal.nodes.length, 21, "初始化应生成 7 天、每天 3 个主线节点");
   assert.strictEqual(Math.max(...goal.nodes.map((node) => node.day)), 7);
   assert.strictEqual(goal.planningQuality.status, "PASSED");
   const dayOne = createDayTaskSet(goal, 1);
-  assert.strictEqual(dayOne.length, 1, "每天只能生成一个核心任务");
-  assert(dayOne[0].sourceRef === null, "没有确认来源时不应伪造来源引用");
+  assert.strictEqual(dayOne.length, 3, "每天必须生成三个主线任务");
+  assert(dayOne.every((task) => task.sourceRef === null), "没有确认来源时不应伪造来源引用");
+  assert.deepStrictEqual(dayOne.map((task) => task.role), ["LEARN", "PRACTICE", "VERIFY"]);
   assert.strictEqual(validateDayTaskSet(goal, dayOne).valid, true);
 
   const broken = [
@@ -55,7 +56,7 @@ function run() {
 
   planRollingHorizon(goal, 2);
   assert.strictEqual(Math.max(...goal.nodes.map((node) => node.day)), 8, "窗口向前移动时只新增一天");
-  assert.strictEqual(goal.nodes.length, 8);
+  assert.strictEqual(goal.nodes.length, 24);
 
   const cetGoal = {
     goalId: "cet6-goal",
@@ -92,7 +93,7 @@ function run() {
   };
   initializeGoalPlanning(cetGoal, aiPlan, 120);
   const cetTitles = cetGoal.nodes.filter((node) => node.day === 1).map((node) => node.title);
-  assert.strictEqual(cetTitles.length, 1, "AI 每天只保留一个核心任务");
+  assert.strictEqual(cetTitles.length, 3, "每天应保留三个主线任务");
   assert(cetTitles.some((title) => /背诵\s*100\s*个六级核心词汇/.test(title)), "六级任务应包含明确词汇数量");
   assert(cetTitles.every((title) => !/主线|支线/.test(title)), "任务标题不得重复写主线或支线");
   assert(cetTitles.every((title) => /^第\s*1\s*天：/.test(title)), "任务标题可以保留第几天");
@@ -102,7 +103,7 @@ function run() {
   assert(cetSideTitles.some((title) => /配音/.test(title)), "支线可以是有趣的口语模仿");
   assert(/词汇、听力、阅读、写作、翻译/.test(ROLLING_TASK_PLAN_SYSTEM_PROMPT), "提示词必须要求覆盖领域内不同训练模块");
   assert(/禁止出现“长期目标”“里程碑”“完成标志”/.test(ROLLING_TASK_PLAN_SYSTEM_PROMPT), "提示词必须禁止系统套话");
-  assert(/而不是把 coreTask 缩短、改名后再写一遍/.test(ROLLING_TASK_PLAN_SYSTEM_PROMPT), "提示词必须区分可选任务与缩水版核心任务");
+  assert(/而不是把 mainTasks 缩短、改名后再写一遍/.test(ROLLING_TASK_PLAN_SYSTEM_PROMPT), "提示词必须区分支线任务与缩水版主线任务");
   assert(/完整看一集剧应按实际片长估算/.test(ROLLING_TASK_PLAN_SYSTEM_PROMPT), "趣味任务的时间估算必须真实");
   assert(!/deliverable/.test(ROLLING_TASK_PLAN_SYSTEM_PROMPT), "任务 JSON 不应包含 deliverable 字段");
   console.log("Portfolio rolling planning quality tests passed.");

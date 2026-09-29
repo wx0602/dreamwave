@@ -57,24 +57,27 @@ async function run() {
 
     let cores = pending(state, "CORE");
     let optionals = pending(state, "OPTIONAL");
-    assert.strictEqual(cores.length, 1, "三个目标合计每天只能发布一个核心任务");
-    assert(optionals.length <= 2, "三个目标合计每天最多发布两个可选任务");
-    assert.strictEqual(cores[0].portfolioGoalId, primary.goalId);
+    assert.strictEqual(cores.length, 3, "三个目标合计每天应发布三个主线任务");
+    assert.strictEqual(optionals.length, 2, "三个目标合计每天应发布两个支线任务");
+    assert.strictEqual(cores.filter((task) => task.portfolioGoalId === primary.goalId).length, 3, "同日新增目标不应改写已经发布的主线");
+    assert.strictEqual(cores.filter((task) => task.portfolioGoalId === secondary.goalId).length, 0);
     assert(optionals.every((task) => task.portfolioGoalId === primary.goalId || task.portfolioGoalId === secondary.goalId));
     assert(!state.tasks.some((task) => !task.done && task.portfolioGoalId === inactive.goalId), "暂停目标不得自动发布任务");
     assert(pending(state).reduce((sum, task) => sum + Number(task.estimatedMinutes || 0), 0) <= state.dailyPlan.capacityMinutes);
 
-    const carriedCoreId = cores[0].taskId || cores[0].id;
+    const expiredCoreIds = cores.map((task) => task.taskId || task.id);
     forceNextPlanningDay();
     state = await getCurrentSessionState();
     cores = pending(state, "CORE");
-    assert.strictEqual(cores.length, 1, "未完成核心任务跨天只能携带一项核心任务");
-    assert.strictEqual(cores[0].id, carriedCoreId);
-    assert(cores[0].carryoverCount >= 1, "携带核心任务应记录跨天次数");
+    assert.strictEqual(cores.length, 3, "次日必须发布三个新的主线任务");
+    assert.strictEqual(cores.filter((task) => task.portfolioGoalId === primary.goalId).length, 2);
+    assert.strictEqual(cores.filter((task) => task.portfolioGoalId === secondary.goalId).length, 1);
+    assert(cores.every((task) => !expiredCoreIds.includes(task.id)), "未完成主线不得顺延到次日");
+    assert(expiredCoreIds.every((id) => state.taskHistory.some((task) => task.id === id && task.archivedReason === "DAILY_TASK_EXPIRED")));
 
-    await completeTask(cores[0].id);
+    for (const task of cores) await completeTask(task.id);
     state = await getCurrentSessionState();
-    assert.strictEqual(pending(state, "CORE").length, 0, "当天完成核心后不得补发第二个核心任务");
+    assert.strictEqual(pending(state, "CORE").length, 0, "当天完成三个主线后不得继续补发");
 
     await createTask("整理本周学习笔记");
     await createTask("整理本周错题清单");
@@ -91,7 +94,7 @@ async function run() {
     state = await getCurrentSessionState();
     assert(pending(state, "OPTIONAL").length <= 2, "自动可选任务隔日不得堆积");
     assert.strictEqual(pending(state, "OPTIONAL").filter((task) => task.source === "CUSTOM").length, 2, "自定义可选任务应可跨日携带");
-    assert(pending(state, "CORE").length <= 1);
+    assert.strictEqual(pending(state, "CORE").length, 3);
 
     const completedOptional = pending(state, "OPTIONAL")[0];
     await completeTask(completedOptional.id);
@@ -103,7 +106,7 @@ async function run() {
       (error) => error instanceof AppError && error.code === "DAILY_OPTIONAL_LIMIT_REACHED"
     );
 
-    console.log("Global daily portfolio v4 tests passed.");
+    console.log("Global daily portfolio 3+2 tests passed.");
   } finally {
     fs.rmSync(runtimeDir, { recursive: true, force: true });
   }

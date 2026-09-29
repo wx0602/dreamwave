@@ -45,8 +45,10 @@ npm run check:backend
 
 ## 5. 运行时存储
 
-- 会话状态：`backend/runtime/session-store.json`
-- Agent 档案：`backend/runtime/agents/{agentId}/IDENTITY.md`
-- Agent 记忆：`backend/runtime/agents/{agentId}/MEMORY.md`
+- 生产用户状态：MySQL `aigc_user_states`
+- 登录会话：MySQL `aigc_auth_sessions`
+- 学习草稿：MySQL `aigc_goal_drafts`
+- 本地开发回退：`backend/runtime/*.json`
+- Agent Markdown：按用户生成的派生文件，不作为生产权威状态
 - 静态角色配置：`backend/config/agents/roles/*.md`
 - 静态技能配置：`backend/config/agents/skills/*.md`

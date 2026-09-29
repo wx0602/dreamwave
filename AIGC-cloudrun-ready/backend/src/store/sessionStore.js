@@ -8,6 +8,7 @@ const { createEmptyMemoryTree } = require("../services/memoryTreeService");
 const { createEmptyWorldState } = require("../services/worldStateService");
 const { getDeepseekApiKey } = require("./runtimeSecrets");
 const { saveAccountSnapshot } = require("./accountStore");
+const { getRequestContext } = require("../context/requestContext");
 
 function createEmptyState() {
   return {
@@ -281,6 +282,15 @@ function loadStore() {
 }
 
 function saveStore() {
+  const context = getRequestContext();
+  if (context) {
+    const scopedState = context.state || createEmptyState();
+    if (!scopedState.meta) scopedState.meta = { nextId: 1, version: 9 };
+    scopedState.meta.updatedAt = new Date().toISOString();
+    context.state = scopedState;
+    context.stateDirty = true;
+    return;
+  }
   ensureRuntimeDir();
   state.meta.updatedAt = new Date().toISOString();
   fs.writeFileSync(env.storeFile, JSON.stringify(state, null, 2), "utf8");
@@ -295,14 +305,25 @@ function saveStore() {
 }
 
 function getState() {
+  const context = getRequestContext();
+  if (context) {
+    if (!context.state) context.state = createEmptyState();
+    return context.state;
+  }
   return loadStore();
 }
 
 function getStateSnapshot() {
-  return clone(loadStore());
+  return clone(getState());
 }
 
 function replaceState(nextState) {
+  const context = getRequestContext();
+  if (context) {
+    context.state = nextState;
+    saveStore();
+    return context.state;
+  }
   state = nextState;
   saveStore();
   return state;
@@ -323,6 +344,12 @@ function createId(prefix) {
 }
 
 function resetStore() {
+  const context = getRequestContext();
+  if (context) {
+    context.state = createEmptyState();
+    saveStore();
+    return context.state;
+  }
   state = createEmptyState();
   saveStore();
   return state;
@@ -345,11 +372,19 @@ function initializeFreshRuntime() {
 }
 
 function initializeRuntime() {
+  if (env.persistence.isMysql) {
+    ensureRuntimeDir();
+    return null;
+  }
   return loadStore();
 }
 
 function getAgentDir(agentId) {
-  return path.join(env.agentsDir, agentId);
+  const context = getRequestContext();
+  const owner = context && (context.userId || context.clientId)
+    ? String(context.userId || context.clientId).replace(/[^a-zA-Z0-9._-]/g, "_")
+    : "legacy";
+  return path.join(env.agentsDir, owner, String(agentId || "agent").replace(/[^a-zA-Z0-9._-]/g, "_"));
 }
 
 module.exports = {

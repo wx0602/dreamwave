@@ -52,32 +52,59 @@ function createDraftCommand(payload = {}) {
   return createGoalDraft({ mode, goalProfile });
 }
 
-function searchSourcesCommand(draftId, payload = {}, options = {}) {
+async function searchSourcesCommand(draftId, payload = {}, options = {}) {
   const current = getGoalDraft(draftId);
   const expectedRevision = Number(payload.expectedRevision);
   const userSources = Array.isArray(payload.userSources) ? payload.userSources : [];
-  return searchLearningSources(current.goalProfile, {
-    userSources,
-    apiKey: options.apiKey,
-    tool: options.tool,
-  }).then((result) => updateGoalDraft(draftId, expectedRevision, (draft) => ({
-    ...draft,
-    status: "SOURCES_READY",
-    userProvidedSources: result.candidates.filter((source) => source.origin === "USER"),
-    sourceCandidates: result.candidates,
-    sourceBundles: result.bundles,
-    selectedBundleId: null,
-    selectedSourceIds: [],
-    planDraft: null,
-    planWarnings: result.warnings || [],
-    searchMode: result.searchMode,
-  })));
+  try {
+    const result = await searchLearningSources(current.goalProfile, {
+      userSources,
+      apiKey: options.apiKey,
+      tool: options.tool,
+    });
+    return updateGoalDraft(draftId, expectedRevision, (draft) => ({
+      ...draft,
+      status: "SOURCES_READY",
+      userProvidedSources: result.candidates.filter((source) => source.origin === "USER"),
+      sourceCandidates: result.candidates,
+      sourceBundles: result.bundles,
+      selectedBundleId: null,
+      selectedSourceIds: [],
+      planDraft: null,
+      planWarnings: result.warnings || [],
+      searchMode: result.searchMode,
+    }));
+  } catch (error) {
+    if (!error || error.code !== "NO_RELIABLE_SOURCE") throw error;
+    return updateGoalDraft(draftId, expectedRevision, (draft) => ({
+      ...draft,
+      status: "SOURCES_READY",
+      userProvidedSources: [],
+      sourceCandidates: [],
+      sourceBundles: [],
+      selectedBundleId: null,
+      selectedSourceIds: [],
+      planDraft: null,
+      planWarnings: ["暂时没有找到合适资料，可以跳过这一步直接生成计划。"],
+      searchMode: "NO_RELIABLE_SOURCE",
+    }));
+  }
 }
 
 function selectSourcesCommand(draftId, payload = {}) {
   const current = getGoalDraft(draftId);
   if (current.status !== "SOURCES_READY" && current.status !== "SOURCE_SELECTED" && current.status !== "PLAN_READY") {
     throw new AppError("INVALID_DRAFT_STATE", "请先完成来源搜索", 409);
+  }
+  if (payload.skip === true) {
+    return updateGoalDraft(draftId, payload.expectedRevision, (draft) => ({
+      ...draft,
+      status: "SOURCE_SKIPPED",
+      selectedBundleId: "SKIPPED",
+      selectedSourceIds: [],
+      planDraft: null,
+      planWarnings: ["本次未绑定学习资料，任务不会引用未经确认的章节或链接。"],
+    }));
   }
   const bundleId = text(payload.bundleId);
   const bundle = (current.sourceBundles || []).find((entry) => entry.bundleId === bundleId);
@@ -94,12 +121,13 @@ function selectSourcesCommand(draftId, payload = {}) {
 
 async function generatePlanCommand(draftId, payload = {}, options = {}) {
   const current = getGoalDraft(draftId);
-  if (current.status !== "SOURCE_SELECTED" && current.status !== "PLAN_READY") {
-    throw new AppError("INVALID_DRAFT_STATE", "请先选择学习来源", 409);
+  if (current.status !== "SOURCE_SELECTED" && current.status !== "SOURCE_SKIPPED" && current.status !== "PLAN_READY") {
+    throw new AppError("INVALID_DRAFT_STATE", "请先选择学习来源或跳过来源选择", 409);
   }
   const selectedIds = current.selectedSourceIds || [];
   const sources = (current.sourceCandidates || []).filter((source) => selectedIds.includes(source.sourceId));
-  if (!sources.length) throw new AppError("SOURCE_BUNDLE_INVALID", "所选路线没有可用来源", 400);
+  const skipped = current.selectedBundleId === "SKIPPED" || current.status === "SOURCE_SKIPPED";
+  if (!skipped && !sources.length) throw new AppError("SOURCE_BUNDLE_INVALID", "所选路线没有可用来源", 400);
   const plan = await generateSourceBoundPlan({
     goalProfile: current.goalProfile,
     selectedSourceIds: selectedIds,
@@ -126,8 +154,8 @@ function getDraftForConfirmation(draftId, expectedRevision) {
   if (Number(expectedRevision) !== Number(draft.revision)) {
     throw new AppError("DRAFT_REVISION_CONFLICT", "草稿已更新，请刷新后重试", 409, { revision: draft.revision });
   }
-  if (draft.status !== "PLAN_READY") throw new AppError("INVALID_DRAFT_STATE", "请先确认来源并生成计划", 409);
-  if (!draft.selectedBundleId || !draft.planDraft) throw new AppError("INVALID_DRAFT_STATE", "来源和计划尚未完整确认", 409);
+  if (draft.status !== "PLAN_READY") throw new AppError("INVALID_DRAFT_STATE", "请先生成并确认计划", 409);
+  if (!draft.selectedBundleId || !draft.planDraft) throw new AppError("INVALID_DRAFT_STATE", "计划尚未完整确认", 409);
   const sources = (draft.sourceCandidates || []).filter((source) => (draft.selectedSourceIds || []).includes(source.sourceId));
   const checked = validateSourceBoundPlan(draft.planDraft, {
     goalProfile: draft.goalProfile,

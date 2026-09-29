@@ -48,10 +48,10 @@ async function run() {
     const optional = state.tasks.find((task) => task.priorityTier === "OPTIONAL" && !task.done);
     if (optional) {
       const beforeStars = state.goalPortfolio.goals[0].completedStars;
-      await completeTask(taskId(optional), { summary: "可选行动记录" });
+      await completeTask(taskId(optional), { summary: "支线行动记录" });
       state = await getCurrentSessionState();
-      assert.strictEqual(state.goalPortfolio.goals[0].completedStars, beforeStars, "可选任务不得点亮核心星位");
-      assert.strictEqual(state.starMap.collections.length, 0, "可选任务不得单独收录星图");
+      assert.strictEqual(state.goalPortfolio.goals[0].completedStars, beforeStars, "支线任务不得点亮主线星位");
+      assert.strictEqual(state.starMap.collections.length, 0, "支线任务不得单独收录星图");
     }
     assert.strictEqual(state.goalPortfolio.goals[0].completedStars, completedStars);
 
@@ -96,9 +96,13 @@ async function run() {
     const hundredEvent = await completeTask(taskId(hundredCore), { summary: hundredSummary });
     assert.strictEqual(hundredEvent.completionSummary, hundredSummary);
     state = await getCurrentSessionState();
+    for (const task of state.tasks.filter((entry) => entry.priorityTier === "CORE" && !entry.done)) {
+      await completeTask(taskId(task));
+    }
+    state = await getCurrentSessionState();
     assert.strictEqual(state.goalPortfolio.goals[0].status, "COMPLETED");
     assert.strictEqual(state.starMap.collections.length, 1);
-    assert.strictEqual(state.starMap.collections[0].stars[0].completionSummary, hundredSummary, "星图快照应保留总结");
+    assert(state.starMap.collections[0].stars.some((star) => star.completionSummary === hundredSummary), "星图快照应保留总结");
 
     console.log("Task summary boundary and persistence tests passed.");
   } finally {

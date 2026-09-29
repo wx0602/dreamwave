@@ -5,7 +5,7 @@
     <view class="diary-card card" wx:for="{{diary}}" wx:key="diaryId">
       <view class="diary-top"><view class="diary-title">{{item.displayTitle}}</view><view class="memory-mark">MEMORY</view></view>
       <view class="diary-body">{{item.displayBody}}</view><view class="diary-date">{{item.displayDate}}</view>
-      <view class="diary-actions"><button class="secondary-button small-button" data-suggestion="{{item.suggestion}}" bindtap="adopt">采纳为任务</button><button class="primary-button small-button" data-id="{{item.diaryId}}" bindtap="refresh">让 AI 重新建议</button></view>
+      <view class="diary-actions"><button class="secondary-button small-button" data-suggestion="{{item.suggestion}}" bindtap="adopt">采纳为任务</button><button class="primary-button small-button" data-id="{{item.diaryId}}" bindtap="refresh">换一个建议</button></view>
     </view>
   </view>
   <view class="syncing" wx:if="{{loading}}">正在读取角色记忆...</view>

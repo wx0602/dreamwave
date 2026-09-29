@@ -3,24 +3,24 @@
     <view class="plan-heading">
       <view class="tag">计划确认</view>
       <view class="page-title">确认你的第一周</view>
-      <view class="page-subtitle">来源已经固定，Agent 只围绕这条路线安排动作。确认后，今天的核心任务才会进入执行。</view>
+      <view class="page-subtitle">每天安排 3 个主线任务和 2 个支线任务。确认后，今天的任务就会进入执行。</view>
     </view>
 
     <view class="loading-block" wx:if="{{loading}}"><view class="loading-orb"></view><view class="loading-stage">正在把来源映射成可执行计划…</view></view>
     <block wx:else>
       <view class="error card" wx:if="{{error}}">{{error}}</view>
-      <view class="source-summary card"><view class="section-heading">本次采用的来源</view><view class="source-line" wx:for="{{sources}}" wx:key="sourceId"><text class="source-mark">◆</text><view><view class="source-title">{{item.title}}</view><view class="hint">{{item.provider}} · {{item.verificationStatus}}</view></view></view></view>
+      <view class="source-summary card"><view class="section-heading">{{sourcesSkipped?'学习资料':'本次采用的来源'}}</view><view class="hint" wx:if="{{sourcesSkipped}}">本次暂未绑定资料，计划会先按目标生成，之后仍可补充来源。</view><view class="source-line" wx:for="{{sources}}" wx:key="sourceId"><text class="source-mark">◆</text><view><view class="source-title">{{item.title}}</view><view class="hint">{{item.provider}} · {{item.verificationStatus}}</view></view></view></view>
 
       <view class="section-title">七日安排</view>
       <view class="week-card card" wx:for="{{firstWeek}}" wx:key="day">
         <view class="day-label"><text>D{{item.day}}</text><text>{{item.day===1?'从今天开始':'随后推进'}}</text></view>
-        <view class="core-row" wx:if="{{item.coreTask}}"><text class="core-badge">CORE</text><view class="task-copy"><view class="task-title">{{item.coreTask.title}}</view><view class="task-detail">{{item.coreTask.detail}}</view><view class="task-meta">{{item.coreTask.estimatedMinutes}} 分钟 · {{item.coreTask.sourceTitle}}</view></view></view>
-        <view class="optional-title" wx:if="{{item.optionalTasks.length}}">可选行动</view>
-        <view class="optional-row" wx:for="{{item.optionalTasks}}" wx:for-item="optional" wx:key="title"><text class="optional-mark">◇</text><view><view>{{optional.title}}</view><view class="hint">{{optional.estimatedMinutes}} 分钟</view></view></view>
+        <view class="core-row" wx:for="{{item.mainTasks}}" wx:for-item="main" wx:key="title"><text class="core-badge">主线</text><view class="task-copy"><view class="task-title">{{main.title}}</view><view class="task-detail">{{main.detail}}</view><view class="task-meta">{{main.estimatedMinutes}} 分钟 · {{main.sourceTitle}}</view></view></view>
+        <view class="optional-title" wx:if="{{item.sideTasks.length}}">支线行动</view>
+        <view class="optional-row" wx:for="{{item.sideTasks}}" wx:for-item="side" wx:key="title"><text class="optional-mark">◇</text><view><view>{{side.title}}</view><view class="hint">{{side.estimatedMinutes}} 分钟</view></view></view>
       </view>
 
       <view class="milestone-card card" wx:if="{{milestones.length}}"><view class="section-heading">阶段节奏</view><view class="milestone" wx:for="{{milestones}}" wx:key="week"><text>第 {{item.week}} 周</text><view>{{item.title}}</view><text class="hint">{{item.outcome}}</text></view></view>
-      <view class="adjust-card card"><view class="section-heading">需要调整吗？</view><view class="hint">可以告诉 Agent 你的真实限制，例如“工作日只能 30 分钟”。它会重新生成计划，但不会替换已选来源。</view><textarea class="field-control textarea" value="{{adjustment}}" placeholder="可选：写下你的时间或难点" bindinput="input"></textarea><button class="secondary-button small-button" loading="{{generating}}" bindtap="generate">按这句话重新生成</button></view>
+      <view class="adjust-card card"><view class="section-heading">需要调整吗？</view><view class="hint">可以写下真实限制，例如“工作日只能 30 分钟”。计划会重新生成{{sourcesSkipped?'。':'，但不会替换已选来源。'}}</view><textarea class="field-control textarea" value="{{adjustment}}" placeholder="可选：写下你的时间或难点" bindinput="input"></textarea><button class="secondary-button small-button" loading="{{generating}}" bindtap="generate">按这句话重新生成</button></view>
       <view class="plan-actions"><button class="secondary-button" bindtap="backToSources">返回换来源</button><button class="primary-button" loading="{{generating || confirming}}" disabled="{{generating || confirming || !firstWeek.length}}" bindtap="confirmPlan">确认计划并开始</button></view>
     </block>
   </view>

@@ -23,10 +23,25 @@ function resolveRuntimeDir(value) {
 const runtimeDir = resolveRuntimeDir(process.env.RUNTIME_DIR);
 const deepseekApiKey = String(process.env.DEEPSEEK_API_KEY || "").trim();
 
+function envFlag(value, fallback = false) {
+  const normalized = String(value === undefined ? "" : value).trim().toLowerCase();
+  if (!normalized) return fallback;
+  return ["1", "true", "yes", "on"].includes(normalized);
+}
+
 function clampEnvInt(value, fallback, minimum, maximum) {
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) return fallback;
   return Math.max(minimum, Math.min(maximum, Math.round(parsed)));
+}
+
+const mysqlUrl = String(process.env.MYSQL_URL || "").trim();
+const mysqlHost = String(process.env.MYSQL_HOST || "").trim();
+const requestedPersistence = String(process.env.PERSISTENCE_DRIVER || "").trim().toLowerCase();
+const persistenceDriver = requestedPersistence || (mysqlUrl || mysqlHost ? "mysql" : "file");
+
+if (!['file', 'mysql'].includes(persistenceDriver)) {
+  throw new Error(`PERSISTENCE_DRIVER must be file or mysql; received: ${persistenceDriver}`);
 }
 
 module.exports = {
@@ -42,6 +57,25 @@ module.exports = {
   accountsDir: path.join(runtimeDir, "accounts"),
   storeFile: path.join(runtimeDir, "session-store.json"),
   accountStoreFile: path.join(runtimeDir, "account-store.json"),
+  authSessionFile: path.join(runtimeDir, "auth-sessions.json"),
+  persistence: {
+    driver: persistenceDriver,
+    isMysql: persistenceDriver === "mysql",
+    requireShared: envFlag(process.env.REQUIRE_SHARED_PERSISTENCE, false),
+  },
+  mysql: {
+    url: mysqlUrl,
+    host: mysqlHost,
+    port: clampEnvInt(process.env.MYSQL_PORT, 3306, 1, 65535),
+    user: String(process.env.MYSQL_USER || "root").trim() || "root",
+    password: String(process.env.MYSQL_PASSWORD || ""),
+    database: String(process.env.MYSQL_DATABASE || "tcb").trim() || "tcb",
+    connectionLimit: clampEnvInt(process.env.MYSQL_CONNECTION_LIMIT, 10, 2, 50),
+    autoMigrate: envFlag(process.env.MYSQL_AUTO_MIGRATE, true),
+  },
+  auth: {
+    sessionTtlDays: clampEnvInt(process.env.AUTH_SESSION_TTL_DAYS, 30, 1, 365),
+  },
   deepseek: {
     enabled: Boolean(deepseekApiKey),
     apiKey: deepseekApiKey,

@@ -11,7 +11,7 @@ const STAR_TOOLS = Object.freeze([
     name: "洞察卷轴",
     icon: "◇",
     action: "SPLIT",
-    detail: "让 AI 把一个困难任务拆成三个可执行步骤。",
+    detail: "把一个困难任务拆成三个可执行步骤。",
   },
   {
     id: "memory-sigil",

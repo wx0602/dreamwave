@@ -1,6 +1,6 @@
-const PLANNING_VERSION = 4;
+const PLANNING_VERSION = 5;
 const ROLLING_HORIZON_DAYS = 7;
-const CORE_TASKS_PER_DAY = 1;
+const CORE_TASKS_PER_DAY = 3;
 const OPTIONAL_TASKS_PER_DAY = 2;
 
 const MAIN_ROLES = Object.freeze([
@@ -17,8 +17,9 @@ function text(value, fallback = "") {
   return result || fallback;
 }
 
-function clamp(value, minimum, maximum) {
-  return Math.max(minimum, Math.min(maximum, Number(value) || minimum));
+function clamp(value, minimum, maximum, fallback = minimum) {
+  const parsed = Number(value);
+  return Math.max(minimum, Math.min(maximum, Number.isFinite(parsed) ? parsed : fallback));
 }
 
 function buildPlanningBlueprint({ goalTitle, durationDays, plan }) {
@@ -101,12 +102,13 @@ function findContext(goal, day) {
 
 function allocateMinutes(dailyBudgetMinutes) {
   const budget = clamp(dailyBudgetMinutes, 25, 480);
-  const optionalEach = Math.max(5, Math.floor(budget * 0.2));
-  const coreBudget = Math.max(5, Math.min(Math.floor(budget * 0.6), budget - optionalEach * OPTIONAL_TASKS_PER_DAY));
+  const optionalEach = Math.max(5, Math.floor(budget * 0.15));
+  const mainBudget = Math.max(15, budget - optionalEach * OPTIONAL_TASKS_PER_DAY);
+  const base = Math.max(5, Math.floor(mainBudget / CORE_TASKS_PER_DAY));
   return {
     optionalEach,
-    core: coreBudget,
-    mainBudget: coreBudget,
+    main: [base, base, Math.max(5, mainBudget - base * 2)],
+    mainBudget,
     totalBudget: budget,
   };
 }
@@ -141,44 +143,34 @@ function createConcreteDomainTasks(goal, day, context, minutes) {
   const firstWeek = goal.planningBlueprint && Array.isArray(goal.planningBlueprint.firstWeek)
     ? goal.planningBlueprint.firstWeek.find((entry) => Number(entry.day) === Number(day))
     : null;
-  if (firstWeek && firstWeek.coreTask) {
-    return withContext([{
-      role: "LEARN",
-      roleLabel: "核心推进",
-      title: actionableTitle(firstWeek.coreTask.title, `${context.phase.title}核心任务`),
-      detail: text(firstWeek.coreTask.detail),
-      estimatedMinutes: clamp(firstWeek.coreTask.estimatedMinutes, 5, 90),
-      sourceRef: firstWeek.coreTask.sourceRef || defaultSourceRef,
-      selectionReason: text(firstWeek.coreTask.selectionReason),
-    }], goal, day, context);
-  }
   const aiDay = goal.planningBlueprint && Array.isArray(goal.planningBlueprint.rollingDays)
     ? goal.planningBlueprint.rollingDays.find((entry) => Number(entry.day) === Number(day))
     : null;
-  if (aiDay && (aiDay.coreTask || Array.isArray(aiDay.mainTasks) && aiDay.mainTasks.length > 0)) {
-    const task = aiDay.coreTask || aiDay.mainTasks[0];
-    return withContext([{
-      role: "LEARN",
-      roleLabel: "核心推进",
-      title: actionableTitle(task.title, `${context.phase.title}核心任务`),
-      detail: text(task.detail),
-      estimatedMinutes: clamp(task.estimatedMinutes, 5, 90),
-      sourceRef: task.sourceRef || defaultSourceRef,
-      selectionReason: text(task.selectionReason),
-    }], goal, day, context);
-  }
   const items = context.phase.focusItems;
-  const phaseOffset = Math.max(0, day - context.phase.startDay);
-  const item = items[Math.min(items.length - 1, phaseOffset)] || context.focus;
-  return withContext([{
-    role: "LEARN",
-    roleLabel: "核心推进",
-    title: `完成「${item.title}」的 1 个具体动作`,
-    detail: `${text(item.detail, "按要求完成具体操作")}；保存一个结果或未解决问题。`,
-    estimatedMinutes: minutes.core,
-    sourceRef: defaultSourceRef,
-    selectionReason: "按阶段顺序推进当前最重要的一个范围。",
-  }], goal, day, context);
+  const phaseOffset = Math.max(0, day - context.phase.startDay) * CORE_TASKS_PER_DAY;
+  const suppliedTasks = firstWeek
+    ? (Array.isArray(firstWeek.mainTasks) ? firstWeek.mainTasks : firstWeek.coreTask ? [firstWeek.coreTask] : [])
+    : aiDay
+      ? (Array.isArray(aiDay.mainTasks) ? aiDay.mainTasks : aiDay.coreTask ? [aiDay.coreTask] : [])
+      : [];
+  const titles = (item) => [
+    `列出「${item.title}」的 3 个学习要点`,
+    `完成 1 项「${item.title}」练习或操作`,
+    `检查「${item.title}」的结果并记录 1 个问题`,
+  ];
+  return withContext(MAIN_ROLES.map((role, index) => {
+    const raw = suppliedTasks[index] || {};
+    const item = items[Math.min(items.length - 1, phaseOffset + index)] || context.focus;
+    return {
+      role: role.id,
+      roleLabel: role.label,
+      title: actionableTitle(raw.title, titles(item)[index]),
+      detail: text(raw.detail || raw.description, `${text(item.detail, "按要求完成具体操作")}；保存笔记、答案、文件或一个未解决问题。`),
+      estimatedMinutes: clamp(raw.estimatedMinutes, 5, 90, minutes.main[index]),
+      sourceRef: raw.sourceRef || defaultSourceRef,
+      selectionReason: text(raw.selectionReason, `作为今天的${role.label}环节，与另外两条主线形成完整推进。`),
+    };
+  }), goal, day, context);
 }
 
 function createDayTaskSet(goal, day) {
@@ -195,6 +187,7 @@ function validateDayTaskSet(goal, tasks) {
   const issues = [];
   const roles = new Set(tasks.map((task) => task.role));
   if (tasks.length !== CORE_TASKS_PER_DAY) issues.push("CORE_TASK_COUNT");
+  if (MAIN_ROLES.some((role) => !roles.has(role.id))) issues.push("ROLE_COVERAGE");
   if (tasks.some((task) => !ACTION_PATTERN.test(text(task.title)))) issues.push("MISSING_ACTION");
   if (tasks.some((task) => !SPECIFICITY_PATTERN.test(`${text(task.title)} ${text(task.detail)}`))) issues.push("LOW_SPECIFICITY");
   if (tasks.some((task) => !text(task.phaseId) || !text(task.weeklyMilestoneId))) issues.push("LOW_RELEVANCE");
@@ -231,7 +224,7 @@ function planRollingHorizon(goal, fromDay, horizonDays = ROLLING_HORIZON_DAYS, o
       for (let slot = 1; slot <= CORE_TASKS_PER_DAY; slot += 1) {
         if (existingSlots.has(slot)) continue;
         const node = {
-          nodeId: `${goal.goalId}-core-${day}-${Math.random().toString(36).slice(2, 8)}`,
+          nodeId: `${goal.goalId}-core-${day}-${slot}`,
           day,
           slot,
           status: "LOCKED",
@@ -297,8 +290,35 @@ function initializeGoalPlanning(goal, plan, dailyBudgetMinutes) {
     ? Number(firstAvailable.day)
     : firstLegacyLocked
       ? Number(firstLegacyLocked.day)
-    : Math.min(Number(goal.durationDays), Math.max(1, Number(goal.completedDays || 0) + 1));
+      : Math.min(Number(goal.durationDays), Math.max(1, Number(goal.completedDays || 0) + 1));
+  for (let day = 1; day < nextDay; day += 1) {
+    const existingSlots = new Set(goal.nodes.filter((node) => Number(node.day) === day).map((node) => Number(node.slot) || 1));
+    for (let slot = 1; slot <= CORE_TASKS_PER_DAY; slot += 1) {
+      if (existingSlots.has(slot)) continue;
+      goal.nodes.push({
+        nodeId: `${goal.goalId}-core-${day}-${slot}`,
+        day,
+        slot,
+        status: "MISSED",
+        releasedDate: null,
+        completedAt: null,
+        missedAt: new Date().toISOString(),
+        planningStatus: "LEGACY_MISSED",
+        qualityScore: 0,
+        taskRole: MAIN_ROLES[slot - 1].id,
+        taskRoleLabel: MAIN_ROLES[slot - 1].label,
+        priorityTier: "CORE",
+        sourceRef: null,
+        selectionReason: "旧版每日计划迁移时补齐的历史星位。",
+        title: `第 ${day} 天：旧版计划未记录的主线 ${slot}`,
+        detail: "此星位用于兼容新版每天三个主线的星图结构。",
+        estimatedMinutes: 0,
+      });
+    }
+  }
+  goal.plannedThroughDay = Math.max(0, ...goal.nodes.map((node) => Number(node.day) || 0));
   if (nextDay <= Number(goal.durationDays)) planRollingHorizon(goal, nextDay, ROLLING_HORIZON_DAYS, true);
+  goal.nodes.sort((left, right) => Number(left.day || 0) - Number(right.day || 0) || Number(left.slot || 0) - Number(right.slot || 0));
   return goal;
 }
 
@@ -343,8 +363,10 @@ function buildSideTasks(goal, day) {
   const firstWeek = goal.planningBlueprint && Array.isArray(goal.planningBlueprint.firstWeek)
     ? goal.planningBlueprint.firstWeek.find((entry) => Number(entry.day) === Number(day))
     : null;
-  if (firstWeek && Array.isArray(firstWeek.optionalTasks)) {
-    return firstWeek.optionalTasks.slice(0, OPTIONAL_TASKS_PER_DAY).map((task, index) => ({
+  const firstWeekSideTasks = firstWeek && (Array.isArray(firstWeek.sideTasks)
+    ? firstWeek.sideTasks : Array.isArray(firstWeek.optionalTasks) ? firstWeek.optionalTasks : []);
+  if (firstWeekSideTasks && firstWeekSideTasks.length) {
+    return firstWeekSideTasks.slice(0, OPTIONAL_TASKS_PER_DAY).map((task, index) => ({
       title: `第 ${day} 天：${actionableTitle(task.title, `可选行动 ${index + 1}`)}`,
       detail: text(task.detail),
       estimatedMinutes: clamp(task.estimatedMinutes, 5, 45),
@@ -371,10 +393,16 @@ function buildSideTasks(goal, day) {
   }
   return [
     {
-      title: `第 ${day} 天：整理「${focus.title}」的一个结果`,
+      title: `第 ${day} 天：整理「${focus.title}」的完成结果`,
       detail: `用 ${minutes.optionalEach} 分钟归档今天的笔记、答案或作品。`,
       estimatedMinutes: minutes.optionalEach,
       taskRole: "ORGANIZE",
+    },
+    {
+      title: `第 ${day} 天：写下明天的第一个具体动作`,
+      detail: `用 ${minutes.optionalEach} 分钟写下一个未解决问题和明天开始后的第一个动作。`,
+      estimatedMinutes: minutes.optionalEach,
+      taskRole: "REFLECT",
     },
   ];
 }

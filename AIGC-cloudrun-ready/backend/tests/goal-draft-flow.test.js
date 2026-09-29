@@ -104,6 +104,7 @@ async function run() {
     draft = await generatePlanCommand(draft.draftId, { expectedRevision: draft.revision });
     assert.strictEqual(draft.status, "PLAN_READY");
     assert(draft.planDraft && draft.planDraft.firstWeek.length > 0);
+    assert(draft.planDraft.firstWeek.every((day) => day.mainTasks.length === 3 && day.sideTasks.length === 2));
 
     // Re-selecting a bundle intentionally invalidates the old plan.
     draft = selectSourcesCommand(draft.draftId, {
@@ -118,6 +119,23 @@ async function run() {
     );
     draft = await generatePlanCommand(draft.draftId, { expectedRevision: draft.revision });
     assert.strictEqual(draft.status, "PLAN_READY");
+
+    let skippedDraft = createDraftCommand({
+      mode: "PARALLEL",
+      goalProfile: { title: "学习一个冷门主题", durationDays: 7, dailyTime: "1 小时" },
+    });
+    skippedDraft = await searchSourcesCommand(skippedDraft.draftId, { expectedRevision: skippedDraft.revision }, {
+      tool: { async searchSources() { return []; }, async extractPublicOutline() { return null; } },
+    });
+    assert.strictEqual(skippedDraft.status, "SOURCES_READY");
+    assert.strictEqual(skippedDraft.sourceBundles.length, 0);
+    skippedDraft = selectSourcesCommand(skippedDraft.draftId, { expectedRevision: skippedDraft.revision, skip: true });
+    assert.strictEqual(skippedDraft.status, "SOURCE_SKIPPED");
+    skippedDraft = await generatePlanCommand(skippedDraft.draftId, { expectedRevision: skippedDraft.revision });
+    assert.strictEqual(skippedDraft.status, "PLAN_READY");
+    assert(skippedDraft.planDraft.firstWeek.every((day) => day.mainTasks.length === 3 && day.sideTasks.length === 2));
+    assert(skippedDraft.planDraft.firstWeek.every((day) => [...day.mainTasks, ...day.sideTasks].every((task) => task.sourceRef === null)));
+    assert.doesNotThrow(() => getDraftForConfirmation(skippedDraft.draftId, skippedDraft.revision));
 
     await createSession({
       account: `draft-flow-${Date.now()}`,

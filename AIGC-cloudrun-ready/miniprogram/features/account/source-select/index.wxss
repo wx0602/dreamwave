@@ -28,3 +28,4 @@
 .source-url { margin-bottom:18rpx; }
 .source-actions { display:flex; gap:18rpx; margin-top:34rpx; padding-bottom:30rpx; }
 .source-actions button { flex:1; min-width:0; }
+.skip-source { width:100%; margin:-12rpx 0 30rpx; }

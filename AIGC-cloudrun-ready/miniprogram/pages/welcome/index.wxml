@@ -1,7 +1,7 @@
 <view class="welcome-page">
   <view class="welcome-content">
     <image class="welcome-image" src="/assets/welcome.jpg" mode="aspectFit" />
-    <view class="welcome-badge">AI 学习冒险</view>
+    <view class="welcome-badge">沉浸式学习冒险</view>
     <view class="welcome-title">{{title}}<text class="cursor" wx:if="{{!ready}}">|</text></view>
     <view class="welcome-subtitle">{{subtitle}}</view>
     <view class="welcome-actions {{ready ? 'is-ready' : ''}}">

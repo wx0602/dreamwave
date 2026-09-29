@@ -2,7 +2,7 @@ const api = require("../../services/api");
 const storage = require("../../utils/storage");
 const { value, showError, eventToStory } = require("../../utils/ui");
 const { CONSTELLATIONS, getConstellation } = require("../../utils/constellations");
-const SERIES_MAP_SIZE = 15;
+const MAIN_TASKS_PER_DAY = 3;
 
 const TOOL_META = [
   { toolId: "focus-cloak", name: "专注披风", icon: "◒", theme: "focus", action: "FOCUS", detail: "为未完成任务开启 25 分钟专注模式" },
@@ -50,7 +50,7 @@ function buildSky(goal) {
       showTodayLabel: node.status === "AVAILABLE" && Number(node.slot || 1) === 1,
       compactSize,
       compactOffset: -Math.round(compactSize / 2),
-      statusLabel: node.status === "DONE" ? "已点亮" : node.status === "AVAILABLE" ? "今日可点亮" : "等待解锁",
+      statusLabel: node.status === "DONE" ? "已点亮" : node.status === "AVAILABLE" ? "今日可点亮" : node.status === "MISSED" ? "本日未完成" : "等待解锁",
     };
   });
   return { shape, majorStars, lines, dailyStars };
@@ -79,39 +79,40 @@ function buildInitialGoalFallback(state) {
   const durationDays = parseDurationDays(user.deadline, 30);
   const templates = ((plan && plan.stageGoals) || []).reduce((all, stage) => all.concat(stage.tasks || []), []);
   const completed = templates.filter((task) => String(task.status || "").toUpperCase() === "DONE");
-  const pendingTask = (state.tasks || []).find((task) => String(task.status).toLowerCase() !== "completed" && task.priorityTier === "CORE");
-  const totalStarCount = durationDays;
+  const pendingTasks = (state.tasks || []).filter((task) => String(task.status).toLowerCase() !== "completed" && task.priorityTier === "CORE").slice(0, MAIN_TASKS_PER_DAY);
+  const totalStarCount = durationDays * MAIN_TASKS_PER_DAY;
   const completedStars = Math.min(completed.length, totalStarCount);
-  const completedDays = completedStars;
+  const completedDays = Math.floor(completedStars / MAIN_TASKS_PER_DAY);
   const goal = {
     goalId: "initial-goal-fallback",
     title,
-    description: `每天完成 1 个核心任务，${durationDays} 天共点亮 ${totalStarCount} 颗星。`,
+    description: `每天完成 ${MAIN_TASKS_PER_DAY} 个主线任务，${durationDays} 天共点亮 ${totalStarCount} 颗星。`,
     durationDays,
     completedDays,
     completedStars,
     totalStarCount,
-    starsPerDay: 1,
+    starsPerDay: MAIN_TASKS_PER_DAY,
     status: completedStars >= totalStarCount ? "COMPLETED" : "ACTIVE",
     constellationId: "ursa-major",
     constellationName: "大熊座",
     synthetic: true,
-    nodes: Array.from({ length: Math.min(durationDays, 7) }, (_, index) => {
-      const day = index + 1;
-      const slot = 1;
+    nodes: Array.from({ length: Math.min(durationDays, 7) * MAIN_TASKS_PER_DAY }, (_, index) => {
+      const day = Math.floor(index / MAIN_TASKS_PER_DAY) + 1;
+      const slot = index % MAIN_TASKS_PER_DAY + 1;
       const templateIndex = Math.min(
         Math.max(0, templates.length - 1),
         Math.floor((day - 1) * Math.max(templates.length, 1) / Math.min(durationDays, 7))
       );
       const template = templates[templateIndex] || {};
       const isDone = index < completedStars;
-      const isToday = !isDone && day === completedDays + 1 && Boolean(pendingTask);
-      const cet6Titles = [`完成第 ${day} 天的核心学习动作`];
+      const pendingTask = pendingTasks[slot - 1];
+      const isToday = !isDone && day === Math.floor(completedStars / MAIN_TASKS_PER_DAY) + 1 && Boolean(pendingTask);
+      const cet6Titles = [`列出第 ${day} 天的 3 个学习要点`, `完成第 ${day} 天的 1 组练习`, `检查第 ${day} 天的结果并记录问题`];
       const generatedTitle = /六级|cet[-\s]?6/i.test(title)
         ? cet6Titles[slot - 1]
         : (isToday ? pendingTask.title : template.title || "完成一项具体任务");
       return {
-        nodeId: `initial-goal-fallback-core-${index + 1}`,
+        nodeId: `initial-goal-fallback-core-${day}-${slot}`,
         day,
         slot,
         title: `第 ${day} 天：${generatedTitle}`,
@@ -123,15 +124,21 @@ function buildInitialGoalFallback(state) {
     }),
   };
   const constellationIds = Object.keys(CONSTELLATIONS);
-  goal.constellations = Array.from({ length: Math.ceil(totalStarCount / SERIES_MAP_SIZE) }, (_, index) => {
+  goal.constellations = [];
+  let start = 0;
+  let mapIndex = 0;
+  while (start < totalStarCount) {
+    const index = mapIndex;
     const constellationId = constellationIds[index % constellationIds.length];
     const shape = getConstellation(constellationId);
-    const start = index * SERIES_MAP_SIZE;
-    const starCount = Math.min(SERIES_MAP_SIZE, totalStarCount - start);
-    const nodeIds = Array.from({ length: starCount }, (_, nodeIndex) => `initial-goal-fallback-core-${start + nodeIndex + 1}`);
+    const starCount = Math.min(shape.points.length, totalStarCount - start);
+    const nodeIds = Array.from({ length: starCount }, (_, nodeIndex) => {
+      const globalIndex = start + nodeIndex;
+      return `initial-goal-fallback-core-${Math.floor(globalIndex / MAIN_TASKS_PER_DAY) + 1}-${globalIndex % MAIN_TASKS_PER_DAY + 1}`;
+    });
     const nodes = nodeIds.map((nodeId) => goal.nodes.find((node) => node.nodeId === nodeId)).filter(Boolean);
     const completedMapStars = nodes.filter((node) => node.status === "DONE").length;
-    return {
+    goal.constellations.push({
       mapId: `initial-map-${index + 1}`,
       order: index + 1,
       constellationId,
@@ -140,8 +147,10 @@ function buildInitialGoalFallback(state) {
       starCount,
       completedStars: completedMapStars,
       status: completedMapStars === starCount ? "COMPLETED" : index === 0 || completedMapStars > 0 ? "ACTIVE" : "LOCKED",
-    };
-  });
+    });
+    start += starCount;
+    mapIndex += 1;
+  }
   return goal;
 }
 
@@ -150,7 +159,7 @@ Page({
     loading: true, mode: "current", state: null,
     goals: [], selectedGoalId: "", activeGoal: null, seriesMaps: [], selectedMapId: "", activeMap: null,
     constellationName: "", constellationLatin: "", majorStars: [], lines: [], dailyStars: [],
-    todayTask: null, companionStars: [], atlas: [], tools: [],
+    todayTasks: [], companionStars: [], atlas: [], tools: [],
     starDetail: null, atlasDetail: null, toolModal: false, selectedTool: null, toolTargets: [], story: null,
   },
 
@@ -191,16 +200,20 @@ Page({
       || goals[0]
       || null;
     const nodeById = new Map(((activeGoal && activeGoal.nodes) || []).map((node) => [node.nodeId, node]));
-    const seriesMaps = ((activeGoal && activeGoal.constellations) || []).map((map) => ({
+    let seriesOffset = 0;
+    const seriesMaps = ((activeGoal && activeGoal.constellations) || []).map((map) => {
+      const mapOffset = seriesOffset;
+      seriesOffset += Number(map.starCount) || (map.nodeIds || []).length;
+      return {
       ...map,
       nodes: (map.nodeIds || []).map((nodeId, mapIndex) => {
         const existing = nodeById.get(nodeId);
         if (existing) return existing;
-        const globalIndex = (Number(map.order || 1) - 1) * SERIES_MAP_SIZE + mapIndex;
+        const globalIndex = mapOffset + mapIndex;
         return {
           nodeId,
-          day: globalIndex + 1,
-          slot: 1,
+          day: Math.floor(globalIndex / MAIN_TASKS_PER_DAY) + 1,
+          slot: globalIndex % MAIN_TASKS_PER_DAY + 1,
           title: "尚未进入七日规划",
           detail: "这是一颗已预留的星位。接近执行日期后，系统才会生成对应任务。",
           estimatedMinutes: 0,
@@ -209,19 +222,20 @@ Page({
         };
       }),
       progress: map.starCount ? Math.round(Number(map.completedStars || 0) * 100 / map.starCount) : 0,
-    }));
+    };
+    });
     const activeMap = seriesMaps.find((map) => map.mapId === selectedMapId)
       || seriesMaps.find((map) => map.status === "ACTIVE")
       || seriesMaps.find((map) => map.status === "LOCKED")
       || seriesMaps[seriesMaps.length - 1]
       || null;
     const sky = buildSky(activeMap);
-    const todayTask = activeGoal
-      ? (state.tasks || []).find((task) => (
+    const todayTasks = activeGoal
+      ? (state.tasks || []).filter((task) => (
           (activeGoal.synthetic ? task.priorityTier === "CORE" : task.portfolioGoalId === activeGoal.goalId && task.priorityTier === "CORE")
           && String(task.status).toLowerCase() !== "completed"
-        )) || null
-      : null;
+        )).slice(0, MAIN_TASKS_PER_DAY)
+      : [];
     const companionStars = (state.tasks || []).filter((task) => !task.portfolioGoalId).map((task) => ({
       taskId: task.taskId, title: task.title, done: String(task.status).toLowerCase() === "completed",
     }));
@@ -234,7 +248,7 @@ Page({
       seriesMaps, selectedMapId: activeMap ? activeMap.mapId : "", activeMap,
       constellationName: sky.shape.name, constellationLatin: sky.shape.subtitle,
       majorStars: sky.majorStars, lines: sky.lines, dailyStars: sky.dailyStars,
-      todayTask, companionStars,
+      todayTasks, companionStars,
       atlas: goals.reduce((all, goal) => all.concat(((goal.constellations || [])
         .filter((map) => map.status === "COMPLETED")
         .map((map) => ({

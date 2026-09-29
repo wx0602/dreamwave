@@ -1,7 +1,7 @@
 const api = require("../../../services/api");
 const storage = require("../../../utils/storage");
 
-const STAGES = ["正在确认学习来源", "正在核对第一周计划", "正在写入世界档案", "正在开启今日核心任务"];
+const STAGES = ["正在确认学习资料", "正在核对第一周计划", "正在写入世界档案", "正在开启今日主线任务"];
 
 Page({
   data: { progress: 8, stage: STAGES[0], error: "", working: false },

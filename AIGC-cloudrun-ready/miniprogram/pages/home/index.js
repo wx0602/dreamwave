@@ -63,7 +63,7 @@ Page({
       .map((task, index, list) => ({
       ...task,
       done: String(task.status).toLowerCase() === "completed",
-      typeLabel: task.priorityTier === "OPTIONAL" ? "可选" : "核心",
+      typeLabel: task.priorityTier === "OPTIONAL" ? "支线" : "主线",
       sectionStart: index === 0 || list[index - 1].priorityTier !== task.priorityTier,
       sourceTitle: task.sourceRef && task.sourceRef.sourceTitle || "",
       sourceLocator: task.sourceRef && task.sourceRef.locatorLabel || "",
@@ -131,7 +131,7 @@ Page({
   runAction(event) {
     const action = event.currentTarget.dataset.action;
     this.setData({ actionModal: false });
-    if (action === "create") this.setData({ inputModal: true, inputMode: "create", inputTitle: "新建可选行动", inputValue: "", inputTaskId: "" });
+    if (action === "create") this.setData({ inputModal: true, inputMode: "create", inputTitle: "新建支线行动", inputValue: "", inputTaskId: "" });
     if (action === "goal") wx.navigateTo({ url: "/features/account/goal-setup/index" });
   },
   openGoalWorkbench() { wx.navigateTo({ url: "/features/adventure/goal-map/index" }); },

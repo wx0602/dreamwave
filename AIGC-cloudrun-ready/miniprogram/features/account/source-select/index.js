@@ -6,7 +6,7 @@ function text(value, fallback = "") {
 }
 
 function friendlyError(error, fallback) {
-  const messages = { NO_RELIABLE_SOURCE: "暂时没有可靠来源，请补充你已有的资料。", DRAFT_REVISION_CONFLICT: "草稿已更新，请重新选择来源。", SOURCE_PROVIDER_UNAVAILABLE: "公开搜索暂时不可用，已尝试使用精选目录。" };
+  const messages = { NO_RELIABLE_SOURCE: "暂时没有可靠来源，你可以补充资料，也可以先跳过。", DRAFT_REVISION_CONFLICT: "草稿已更新，请重新选择来源。", SOURCE_PROVIDER_UNAVAILABLE: "公开搜索暂时不可用，已尝试使用精选目录。" };
   return messages[error && error.code] || error && error.message || fallback;
 }
 
@@ -79,7 +79,7 @@ Page({
       draft,
       bundles,
       selectedBundleId: draft.selectedBundleId || "",
-      searchModeLabel: draft.searchMode === "CATALOG_ONLY" ? "已使用精选目录" : draft.searchMode === "USER_AND_CATALOG" ? "已合并你的资料与精选目录" : "已完成公开来源搜索",
+      searchModeLabel: draft.searchMode === "NO_RELIABLE_SOURCE" ? "暂未找到合适资料" : draft.searchMode === "CATALOG_ONLY" ? "已使用精选目录" : draft.searchMode === "USER_AND_CATALOG" ? "已合并你的资料与精选目录" : "已完成公开来源搜索",
     });
   },
 
@@ -146,6 +146,24 @@ Page({
       wx.navigateTo({ url: "/features/account/plan-review/index?draftId=" + encodeURIComponent(next.draftId) });
     } catch (error) {
       this.setData({ error: friendlyError(error, "来源选择失败") });
+    } finally {
+      this.setData({ searching: false });
+    }
+  },
+
+  async skipSources() {
+    const draft = this.data.draft;
+    if (!draft || this.data.searching) return;
+    this.setData({ searching: true, error: "" });
+    try {
+      const next = await api.selectGoalSources(draft.draftId, {
+        skip: true,
+        expectedRevision: draft.revision,
+      });
+      getApp().globalData.goalDraft = next;
+      wx.navigateTo({ url: "/features/account/plan-review/index?draftId=" + encodeURIComponent(next.draftId) });
+    } catch (error) {
+      this.setData({ error: friendlyError(error, "暂时无法跳过资料选择") });
     } finally {
       this.setData({ searching: false });
     }

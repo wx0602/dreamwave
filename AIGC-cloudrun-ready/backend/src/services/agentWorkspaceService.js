@@ -251,6 +251,7 @@ function readMemoryMarkdown(agentId) {
 
 module.exports = {
   ensureAgentWorkspace,
+  buildMemoryMarkdown,
   syncIdentity,
   syncMemory,
   readMemoryMarkdown,

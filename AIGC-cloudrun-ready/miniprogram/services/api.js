@@ -1,4 +1,5 @@
 const cloudConfig = require("../config/cloud");
+const storage = require("../utils/storage");
 
 const ROUTES = Object.freeze({
   roles: "/api/roles",
@@ -62,7 +63,12 @@ function unwrap(result) {
 }
 
 function callContainer(path, method, data) {
-  const header = { "content-type": "application/json" };
+  const header = {
+    "content-type": "application/json",
+    "X-Client-ID": storage.getOrCreateClientId(),
+  };
+  const sessionToken = storage.get(storage.KEYS.sessionToken, "");
+  if (sessionToken) header.Authorization = `Bearer ${sessionToken}`;
   if (cloudConfig.service) header["X-WX-SERVICE"] = cloudConfig.service;
   const options = {
     path,
@@ -79,7 +85,13 @@ function callLocal(path, method, data) {
     wx.request({
       url: String(cloudConfig.localBaseUrl || "http://127.0.0.1:3001").replace(/\/$/, "") + path,
       method,
-      header: { "content-type": "application/json" },
+      header: {
+        "content-type": "application/json",
+        "X-Client-ID": storage.getOrCreateClientId(),
+        ...(storage.get(storage.KEYS.sessionToken, "")
+          ? { Authorization: `Bearer ${storage.get(storage.KEYS.sessionToken, "")}` }
+          : {}),
+      },
       data: data === undefined ? undefined : cleanData(data),
       success: resolve,
       fail: reject,
@@ -92,7 +104,9 @@ async function request(path, method = "GET", data) {
     const result = cloudConfig.transport === "local" && typeof wx.request === "function"
       ? await callLocal(path, method, data)
       : await callContainer(path, method, data);
-    return unwrap(result);
+    const value = unwrap(result);
+    if (value && value.sessionToken) storage.set(storage.KEYS.sessionToken, value.sessionToken);
+    return value;
   } catch (error) {
     if (path === ROUTES.goals && /接口不存在|404/.test(String(error && error.message || ""))) {
       throw new Error("云端后端版本过旧，请重新部署 aigc-backend 后再新增长期目标");

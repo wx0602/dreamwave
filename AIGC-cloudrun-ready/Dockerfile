@@ -5,11 +5,13 @@ RUN apk add --no-cache tzdata
 ENV NODE_ENV=production \
     HOST=0.0.0.0 \
     PORT=3001 \
+    REQUIRE_SHARED_PERSISTENCE=true \
     TZ=Asia/Shanghai
 
 WORKDIR /app
 
-COPY --chown=node:node package.json ./
+COPY --chown=node:node package.json package-lock.json ./
+RUN npm ci --omit=dev --no-audit --no-fund
 COPY --chown=node:node backend ./backend
 
 USER node

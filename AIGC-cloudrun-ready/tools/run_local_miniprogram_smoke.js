@@ -22,7 +22,7 @@ async function closeServer(server) {
 }
 
 async function main() {
-  const server = startServer();
+  const server = await startServer();
   try {
     await run();
   } finally {

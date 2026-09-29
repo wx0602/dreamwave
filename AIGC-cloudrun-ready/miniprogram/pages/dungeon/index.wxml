@@ -1,6 +1,6 @@
 <view class="star-page watercolor-page"><view class="page-pad">
   <view class="star-header">
-    <view><view class="tag">目标星图</view><view class="page-title">我的星图</view><view class="page-subtitle">一个长期目标是一组星图系列；每个核心任务点亮一颗星。</view></view>
+    <view><view class="tag">目标星图</view><view class="page-title">我的星图</view><view class="page-subtitle">一个长期目标是一组形态各异的星图；每个主线任务点亮一颗星。</view></view>
     <button class="add-goal" bindtap="openGoal">＋</button>
   </view>
 
@@ -33,7 +33,7 @@
         <view class="day-star {{item.done?'done':item.available?'available':'locked'}}" wx:for="{{dailyStars}}" wx:key="nodeId" data-index="{{index}}" bindtap="showStar" style="left:{{item.x}}rpx;top:{{item.y}}rpx;width:{{item.compactSize}}rpx;height:{{item.compactSize}}rpx;margin:{{item.compactOffset}}rpx 0 0 {{item.compactOffset}}rpx"><view class="star-glyph">✦</view><text wx:if="{{item.showTodayLabel}}">今日</text></view>
       </view>
       <view class="today-card card">
-        <view class="today-icon">{{todayTask?'✦':'✓'}}</view><view class="today-main"><view class="today-label">{{todayTask?'今日核心':'今日已完成'}}</view><view class="today-title">{{todayTask?'今天先完成这一项核心行动':'下一项核心行动将在明天刷新后解锁'}}</view><view class="today-copy">{{todayTask?'完成后点亮一颗星；可选行动不会改变星图进度。':'可以继续其他并行目标或自定义任务。'}}</view></view>
+        <view class="today-icon">{{todayTasks.length?'✦':'✓'}}</view><view class="today-main"><view class="today-label">{{todayTasks.length?'今日主线':'今日已完成'}}</view><view class="today-title">{{todayTasks.length?'今天还有 '+todayTasks.length+' 个主线行动':'下一组主线行动将在明天刷新后解锁'}}</view><view class="today-copy">{{todayTasks.length?'每完成一个就点亮一颗星；支线行动不改变星图进度。':'可以继续其他并行目标或自定义任务。'}}</view><view class="companion-item" wx:for="{{todayTasks}}" wx:key="taskId"><text>✦</text>{{item.title}}</view></view>
       </view>
       <view class="companion-card card" wx:if="{{companionStars.length}}"><view class="section-mini">今日伴星</view><view class="companion-item {{item.done?'done':''}}" wx:for="{{companionStars}}" wx:key="taskId"><text>{{item.done?'✦':'☆'}}</text>{{item.title}}</view></view>
     </block>

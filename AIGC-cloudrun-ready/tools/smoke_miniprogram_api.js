@@ -1,13 +1,17 @@
 const assert = require("assert");
 
 const baseUrl = String(process.env.SMOKE_BASE_URL || "http://127.0.0.1:3001").replace(/\/$/, "");
+const localStorage = new Map();
 
 global.wx = {
+  getStorageSync(key) { return localStorage.has(key) ? localStorage.get(key) : ""; },
+  setStorageSync(key, value) { localStorage.set(key, value); },
+  removeStorageSync(key) { localStorage.delete(key); },
   cloud: {
     async callContainer(options) {
       const response = await fetch(`${baseUrl}${options.path}`, {
         method: options.method || "GET",
-        headers: { "content-type": "application/json" },
+        headers: { "content-type": "application/json", ...(options.header || {}) },
         body: options.method === "GET" || options.data === undefined
           ? undefined
           : JSON.stringify(options.data),
@@ -50,6 +54,7 @@ async function run() {
   });
   draft = await api.generateGoalPlan(draft.draftId, { expectedRevision: draft.revision });
   assert(draft.planDraft && draft.planDraft.firstWeek.length, "source-bound plan was not generated");
+  assert(draft.planDraft.firstWeek.every((day) => day.mainTasks.length === 3 && day.sideTasks.length === 2), "daily 3+2 plan was not generated");
   const created = await api.confirmGoalDraft(draft.draftId, {
     expectedRevision: draft.revision,
     confirmationKey: "mini-confirm-" + suffix,
@@ -76,8 +81,8 @@ async function run() {
   const completed = await api.completeTask(task.taskId, "");
   assert(completed.state.tasks.some((item) => item.taskId === task.taskId && item.status === "completed"), "task completion failed");
   const activeTasks = completed.state.tasks.filter((item) => item.status !== "completed");
-  assert(activeTasks.filter((item) => item.priorityTier === "CORE").length <= 1, "more than one core task was released");
-  assert(activeTasks.filter((item) => item.priorityTier === "OPTIONAL").length <= 2, "more than two optional tasks were released");
+  assert.strictEqual(activeTasks.filter((item) => item.priorityTier === "CORE").length, 3, "exactly three main tasks should be released");
+  assert(activeTasks.filter((item) => item.priorityTier === "OPTIONAL").length <= 2, "more than two side tasks were released");
 
   await api.refreshNextSuggestion(task.taskId);
   state = await api.getCurrentSession();
@@ -125,8 +130,8 @@ async function run() {
   });
   assert(parallel.state.goalPortfolio.goals.length === 2, "parallel goal was not created through draft flow");
   const finalActive = parallel.state.tasks.filter((item) => item.status !== "completed");
-  assert(finalActive.filter((item) => item.priorityTier === "CORE").length <= 1, "parallel flow released multiple core tasks");
-  assert(finalActive.filter((item) => item.priorityTier === "OPTIONAL").length <= 2, "parallel flow exceeded optional limit");
+  assert.strictEqual(finalActive.filter((item) => item.priorityTier === "CORE").length, 3, "parallel flow should keep the global three-main limit");
+  assert(finalActive.filter((item) => item.priorityTier === "OPTIONAL").length <= 2, "parallel flow exceeded side-task limit");
 
   let legacyBlocked = false;
   try {

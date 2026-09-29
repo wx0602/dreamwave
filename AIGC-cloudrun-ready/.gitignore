@@ -8,5 +8,7 @@ backend/.env.*
 project.private.config.json
 miniprogram/config/cloud.local.js
 
+node_modules/
+
 backend/runtime/*
 !backend/runtime/.gitkeep

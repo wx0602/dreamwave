@@ -2,7 +2,7 @@
   <view class="entering-panel glass-card">
     <view class="emblem"><view class="emblem-core">✦</view></view>
     <view class="page-title">正在开启你的学习路线</view>
-    <view class="page-subtitle">来源、计划与 Agent 正在彼此连接</view>
+    <view class="page-subtitle">来源、计划与冒险档案正在彼此连接</view>
     <view class="stage">{{stage}}</view>
     <view class="progress-row"><view class="progress-track"><view class="progress-fill" style="width: {{progress}}%"></view></view><text>{{progress}}%</text></view>
     <view class="error" wx:if="{{error}}">{{error}}</view>

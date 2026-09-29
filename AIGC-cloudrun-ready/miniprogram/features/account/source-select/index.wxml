@@ -3,7 +3,7 @@
     <view class="source-heading">
       <view class="tag">来源选择</view>
       <view class="page-title">先选学习来源</view>
-      <view class="page-subtitle">Agent 已替你搜集可访问的资料。你只需要选一条最愿意跟随的路线，后续计划会紧贴它展开。</view>
+      <view class="page-subtitle">我们会搜集可访问的学习资料。你可以选一条路线，也可以暂时跳过并直接开始。</view>
     </view>
 
     <view class="loading-block" wx:if="{{loading}}"><view class="loading-orb"></view><view class="loading-stage">正在搜索与你的目标匹配的资料…</view></view>
@@ -11,7 +11,7 @@
       <view class="search-status card"><view class="status-dot"></view><view><view class="status-title">{{searchModeLabel}}</view><view class="hint">链接会在服务端核验；无法确认的章节位置不会被猜测。</view></view></view>
       <view class="error card" wx:if="{{error}}">{{error}}</view>
       <view class="section-title">推荐路线</view>
-      <view class="empty card" wx:if="{{!bundles.length}}">暂时没有形成可靠路线。你可以补充一本已经在用的资料再搜索。</view>
+      <view class="empty card" wx:if="{{!bundles.length}}">暂时没有形成可靠路线。你可以补充已有资料，也可以先跳过，之后再完善。</view>
       <view class="bundle-card card {{item.selected?'selected':''}} {{item.recommended?'recommended':'compact'}}" wx:for="{{bundles}}" wx:key="bundleId" data-id="{{item.bundleId}}" bindtap="chooseBundle">
         <view class="bundle-head"><view class="bundle-label">{{item.label}}</view><view class="bundle-check">{{item.selected?'已选':'选择'}}</view></view>
         <view class="bundle-reason">{{item.fitReason}}</view>
@@ -20,8 +20,9 @@
       </view>
 
       <view class="section-title">已有资料（可选）</view>
-      <view class="user-source card"><view class="hint">如果你已经有教材、课程或项目链接，补充它，Agent 会把它纳入下一轮来源组合。</view><input class="field-control" data-key="userSourceTitle" value="{{userSourceTitle}}" placeholder="资料名称，例如：官方课程讲义" bindinput="input"/><input class="field-control source-url" data-key="userSourceUrl" value="{{userSourceUrl}}" placeholder="公开链接（可选）" bindinput="input"/><button class="secondary-button small-button" loading="{{searching}}" bindtap="searchAgain">重新搜索来源</button></view>
+      <view class="user-source card"><view class="hint">如果你已经有教材、课程或项目链接，可以补充后重新搜索。</view><input class="field-control" data-key="userSourceTitle" value="{{userSourceTitle}}" placeholder="资料名称，例如：官方课程讲义" bindinput="input"/><input class="field-control source-url" data-key="userSourceUrl" value="{{userSourceUrl}}" placeholder="公开链接（可选）" bindinput="input"/><button class="secondary-button small-button" loading="{{searching}}" bindtap="searchAgain">重新搜索来源</button></view>
       <view class="source-actions"><button class="secondary-button" bindtap="back">返回修改</button><button class="primary-button" loading="{{searching}}" disabled="{{!selectedBundleId}}" bindtap="continueToPlan">确认来源，生成计划</button></view>
+      <button class="secondary-button skip-source" loading="{{searching}}" bindtap="skipSources">暂时跳过，直接规划</button>
     </block>
   </view>
 </view>

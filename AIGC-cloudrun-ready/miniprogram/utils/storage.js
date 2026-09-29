@@ -9,6 +9,8 @@ const KEYS = Object.freeze({
   companionPosition: "alliance.companionPosition",
   companionEvent: "alliance.companionEvent",
   lastOverduePopup: "alliance.lastOverduePopup",
+  sessionToken: "alliance.sessionToken",
+  clientId: "alliance.clientId",
 });
 
 function get(key, fallback) {
@@ -25,8 +27,16 @@ function set(key, value) {
 }
 
 function clearSession() {
-  [KEYS.userId, KEYS.userName, KEYS.agentId, KEYS.companionEvent, KEYS.lastOverduePopup]
+  [KEYS.userId, KEYS.userName, KEYS.agentId, KEYS.companionEvent, KEYS.lastOverduePopup, KEYS.sessionToken]
     .forEach((key) => wx.removeStorageSync(key));
 }
 
-module.exports = { KEYS, get, set, clearSession };
+function getOrCreateClientId() {
+  const existing = get(KEYS.clientId, "");
+  if (existing) return existing;
+  const value = `mp-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
+  set(KEYS.clientId, value);
+  return value;
+}
+
+module.exports = { KEYS, get, set, clearSession, getOrCreateClientId };

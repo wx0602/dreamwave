@@ -98,17 +98,17 @@ async function run() {
       assert(goal, "迁移后目标必须保留");
       assert.strictEqual(rawAfterMigration.meta && rawAfterMigration.meta.version, 9);
       assert(rawAfterMigration.dailyPlan.optionalSlotsUsed >= 0 && rawAfterMigration.dailyPlan.optionalSlotsUsed <= 2);
-      assert.strictEqual(goal.planningVersion, 4);
-      assert.strictEqual(goal.totalStarCount, 20);
-      assert.strictEqual(goal.nodes.length, 20, "迁移后应保留完整日节点序列");
-      assert.strictEqual(goal.plannedThroughDay, 20);
+      assert.strictEqual(goal.planningVersion, 5);
+      assert.strictEqual(goal.totalStarCount, 60);
+      assert.strictEqual(goal.nodes.length, Math.min(60, 21 + completedCount * 3), "迁移后应补齐历史星位并保留七日滚动窗口");
+      assert.strictEqual(goal.plannedThroughDay, Math.min(20, completedCount + 7));
       fixture.done.forEach((expected) => {
         const migrated = goal.nodes.find((node) => node.nodeId === expected.nodeId);
         assert(migrated, "DONE 节点 ID 不得改变");
         assert.strictEqual(migrated.completedAt, expected.completedAt, "DONE 节点完成时间不得改变");
       });
       const pending = state.tasks.filter((task) => !task.done && task.portfolioGoalId === fixture.goalId);
-      assert(pending.filter((task) => task.priorityTier === "CORE").length <= 1);
+      assert(pending.filter((task) => task.priorityTier === "CORE").length <= 3);
       assert(pending.filter((task) => task.priorityTier === "OPTIONAL").length <= 2);
       assert.strictEqual(state.starMap.collections.length, completedCount >= 15 ? 1 : 0, "已领取星图不得重复发奖");
 
@@ -133,7 +133,7 @@ async function run() {
     await loginSession({ account: loginFixture.account, password: loginFixture.password });
     const loggedIn = await getCurrentSessionState();
     assert.strictEqual(getState().meta && getState().meta.version, 9, "登录旧账号时也必须执行 v9 迁移");
-    assert.strictEqual(loggedIn.goalPortfolio.goals[0].planningVersion, 4);
+    assert.strictEqual(loggedIn.goalPortfolio.goals[0].planningVersion, 5);
 
     console.log("Session v9 migration tests passed.");
   } finally {

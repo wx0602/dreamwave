@@ -2,7 +2,7 @@
   <view class="completion-panel glass-card" wx:if="{{status==='INPUT'}}">
     <view class="completion-symbol">✦</view>
     <view class="page-title completion-title">完成「{{task.title}}」</view>
-    <view class="page-subtitle">留下一句今天的线索吗？这会帮助 Agent 记住你的真实进展。</view>
+    <view class="page-subtitle">留下一句今天的线索吗？这会帮助旅程伙伴记住你的真实进展。</view>
     <textarea class="summary-input" value="{{summary}}" maxlength="100" placeholder="可选，5—100 个字；也可以直接跳过" bindinput="input"></textarea>
     <view class="summary-hint">总结只写入任务、日志与记忆，不影响奖励。<text>{{summaryLength}}/100</text></view>
     <button class="primary-button" bindtap="complete">完成并结算</button><view class="skip-summary" bindtap="skipSummary">暂不总结</view>

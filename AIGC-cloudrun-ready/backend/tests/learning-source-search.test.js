@@ -130,10 +130,10 @@ async function run() {
     };
     const vagueResult = validateSourceBoundPlan(vaguePlan, planContext);
     assert.strictEqual(vagueResult.valid, false);
-    assert(vagueResult.issues.some((issue) => issue.startsWith("VAGUE_CORE") || issue.startsWith("CORE_NOT_SPECIFIC")));
+    assert(vagueResult.issues.some((issue) => issue.startsWith("VAGUE_MAIN") || issue.startsWith("MAIN_NOT_SPECIFIC")));
     const unknownResult = validateSourceBoundPlan({ ...vaguePlan, firstWeek: [{ ...vaguePlan.firstWeek[0], coreTask: { ...vaguePlan.firstWeek[0].coreTask, title: "阅读语法基础第 1 节", detail: "记录 1 个示例", sourceRef: { sourceId: "invented", locatorType: "CHAPTER", locatorLabel: "不存在章节" } } }] }, planContext);
     assert.strictEqual(unknownResult.valid, false);
-    assert(unknownResult.issues.some((issue) => issue.startsWith("RAW_CORE_SOURCE")));
+    assert(unknownResult.issues.some((issue) => issue.startsWith("RAW_MAIN_SOURCE")));
 
     await expectAppError(
       () => searchLearningSources({ title: "无来源目标", durationDays: 7 }, {

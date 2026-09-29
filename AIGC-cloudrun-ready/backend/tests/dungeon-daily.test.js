@@ -45,13 +45,15 @@ async function run() {
     });
 
     let state = await getCurrentSessionState();
-    await completeTask(state.tasks[0].id);
+    for (const task of state.tasks.filter((entry) => entry.priorityTier === "CORE" && !entry.done)) {
+      await completeTask(task.id);
+    }
     state = await getCurrentSessionState();
 
     const statsBeforeDemo = { ...state.stats };
     startDungeonRun(true);
     let status = getCurrentDungeonStatus(true);
-    assert.strictEqual(status.run.completionRoute, "DAILY_CLEAR", "完成今日唯一核心任务应进入今日全清路线");
+    assert.strictEqual(status.run.completionRoute, "DAILY_CLEAR", "完成今日三个主线任务应进入今日全清路线");
     assert.strictEqual(status.run.rewardEligible, false, "演示副本不得具备正式奖励资格");
     assert.strictEqual(status.run.stageTheme.name, "无穷迷雾边境", "高数首阶段应映射到对应副本主题");
     finishDungeonChoices();
@@ -65,12 +67,12 @@ async function run() {
     startDungeonRun(false, { ignoreTime: true });
     status = getCurrentDungeonStatus(false);
     assert.strictEqual(status.run.rewardEligible, true, "当天首次正式副本应具备奖励资格");
-    assert.deepStrictEqual(status.run.rewardPreview, { growth: 0, resources: 12 });
+    assert.deepStrictEqual(status.run.rewardPreview, { growth: 0, resources: 20 });
     finishDungeonChoices();
     const officialSettlement = await settleDungeonRun();
     state = await getCurrentSessionState();
-    assert.deepStrictEqual(officialSettlement.rewardDelta, { growth: 0, resources: 12 });
-    assert.strictEqual(state.stats.resources, resourcesBeforeOfficial + 12, "今日全清奖励应由后端固定计算");
+    assert.deepStrictEqual(officialSettlement.rewardDelta, { growth: 0, resources: 20 });
+    assert.strictEqual(state.stats.resources, resourcesBeforeOfficial + 20, "今日全清奖励应由后端固定计算");
     assert.strictEqual(state.stats.streak, streakBeforeOfficial, "副本结算不得增加连续天数");
 
     startDungeonRun(false, { ignoreTime: true });
@@ -80,7 +82,7 @@ async function run() {
     const replaySettlement = await settleDungeonRun();
     state = await getCurrentSessionState();
     assert.deepStrictEqual(replaySettlement.rewardDelta, { growth: 0, resources: 0 });
-    assert.strictEqual(state.stats.resources, resourcesBeforeOfficial + 12, "重玩结算不得再次增加资源");
+    assert.strictEqual(state.stats.resources, resourcesBeforeOfficial + 20, "重玩结算不得再次增加资源");
 
     const rawState = getState();
     const completedStage = rawState.goalPlan.stageGoals[0];

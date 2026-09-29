@@ -47,15 +47,15 @@ async function run() {
     const goal = state.goalPortfolio.goals[0];
     assert(state.dailyPlan, "首次进入时应生成今日计划");
     assert.strictEqual(goal.durationDays, 7);
-    assert.strictEqual(goal.nodes.length, 7);
-    assert.strictEqual(pendingLongTermTasks(state, goal.goalId).length, 1, "当天应只释放一个核心星点");
-    assert(state.tasks.filter((task) => task.priorityTier === "OPTIONAL").length <= 2, "全局可选任务不得超过两个");
+    assert.strictEqual(goal.nodes.length, 21);
+    assert.strictEqual(pendingLongTermTasks(state, goal.goalId).length, 3, "当天应释放三个主线星点");
+    assert.strictEqual(state.tasks.filter((task) => task.priorityTier === "OPTIONAL").length, 2, "每天应发布两个支线任务");
 
     const firstPlanId = state.dailyPlan.id;
-    const firstTaskId = pendingLongTermTasks(state, goal.goalId)[0].id;
+    const firstTaskIds = pendingLongTermTasks(state, goal.goalId).map((task) => task.id).sort();
     state = await getCurrentSessionState();
     assert.strictEqual(state.dailyPlan.id, firstPlanId, "同一自然日不得重建每日计划");
-    assert.strictEqual(pendingLongTermTasks(state, goal.goalId)[0].id, firstTaskId, "同日刷新必须幂等");
+    assert.deepStrictEqual(pendingLongTermTasks(state, goal.goalId).map((task) => task.id).sort(), firstTaskIds, "同日刷新必须幂等");
 
     for (const task of pendingLongTermTasks(state, goal.goalId)) await completeTask(task.id, { summary: "完成今日核心动作" });
     state = await getCurrentSessionState();
@@ -71,7 +71,7 @@ async function run() {
 
     forceNextPlanningDay();
     state = await getCurrentSessionState();
-    assert.strictEqual(pendingLongTermTasks(state, goal.goalId).length, 1, "到第二天释放下一个核心任务");
+    assert.strictEqual(pendingLongTermTasks(state, goal.goalId).length, 3, "到第二天发布三个新的主线任务");
     assert.strictEqual(
       state.goalPortfolio.goals[0].nodes.find((node) => node.status === "AVAILABLE").day,
       2
