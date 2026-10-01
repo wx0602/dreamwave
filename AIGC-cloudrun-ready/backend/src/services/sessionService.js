@@ -3331,11 +3331,13 @@ async function loginSession(payload) {
     throw new Error("该账号尚未完成初始化，请先注册");
   }
 
+  if (getRequestContext()) {
+    // Restore the persisted version as well as the user identity. A fresh login
+    // has no bearer token, so its request context starts at version zero.
+    await bindUserToRequest(accountRecord.userId);
+  }
   setDeepseekApiKey(snapshot.apiKey || "");
   replaceState(clone(snapshot.state));
-  if (getRequestContext()) {
-    await bindUserToRequest(accountRecord.userId, { useCurrentState: true });
-  }
 
   const state = getState();
   migrateLegacyState(state);

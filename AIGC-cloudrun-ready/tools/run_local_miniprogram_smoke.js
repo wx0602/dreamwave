@@ -11,6 +11,7 @@ process.env.SMOKE_BASE_URL = `http://127.0.0.1:${process.env.PORT}`;
 delete process.env.DEEPSEEK_API_KEY;
 
 const { startServer } = require("../backend/src/app");
+const { closePersistence } = require("../backend/src/store/requestPersistence");
 const { run } = require("./smoke_miniprogram_api");
 
 process.removeAllListeners("SIGINT");
@@ -27,6 +28,7 @@ async function main() {
     await run();
   } finally {
     await closeServer(server);
+    await closePersistence();
     fs.rmSync(tempRuntime, { recursive: true, force: true });
   }
 }

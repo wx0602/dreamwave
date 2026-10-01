@@ -19,6 +19,8 @@ const { startServer } = require("../src/app");
 function authHeaders(token) {
   return {
     "content-type": "application/json",
+    // The suite restarts its server on the same port; do not reuse old sockets.
+    connection: "close",
     authorization: `Bearer ${token}`,
     "x-client-id": `test-${token.slice(0, 8)}`,
   };
@@ -47,7 +49,7 @@ async function current(token) {
 async function anonymous(pathname, clientId, options = {}) {
   const response = await fetch(`${baseUrl}${pathname}`, {
     method: options.method || "GET",
-    headers: { "content-type": "application/json", "x-client-id": clientId },
+    headers: { "content-type": "application/json", connection: "close", "x-client-id": clientId },
     body: options.body === undefined ? undefined : JSON.stringify(options.body),
   });
   return { response, body: await response.json() };

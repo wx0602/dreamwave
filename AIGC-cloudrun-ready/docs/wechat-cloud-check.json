@@ -1,0 +1,93 @@
+{
+  "checkedAt": "2026-10-01T11:14:20.301Z",
+  "environment": "cloud1-d2gh7wkxx37588619",
+  "service": "aigc-backend",
+  "page": {
+    "pageId": 1,
+    "path": "pages/welcome/index",
+    "query": {},
+    "route": "/pages/welcome/index",
+    "title": "织梦学旅"
+  },
+  "checks": [
+    {
+      "path": "/healthz",
+      "statusCode": 200,
+      "data": {
+        "status": "ok",
+        "service": "aigc-backend",
+        "environment": "production",
+        "timestamp": "2026-10-01T11:14:23.555Z",
+        "uptimeSeconds": 285
+      }
+    },
+    {
+      "path": "/api/roles",
+      "statusCode": 200,
+      "data": {
+        "code": 200,
+        "message": "角色列表获取成功",
+        "success": true,
+        "data": [
+          {
+            "id": "knight",
+            "name": "守望骑士",
+            "description": "适合把学习过程包装成王城守卫与试炼征战。",
+            "agentName": "Aegis-07",
+            "storyTone": "史诗主线 / 使命感强",
+            "worldSetting": "王城边境出现了会吞噬记忆的迷雾，你需要修复失序的知识结界。",
+            "icon": "sprite--knight",
+            "startingSkills": [
+              "连续专注成就",
+              "稳定节奏成就"
+            ],
+            "dungeonBaseStats": {
+              "hp": 140,
+              "attack": 22,
+              "defense": 18,
+              "shield": 4
+            }
+          },
+          {
+            "id": "scholar",
+            "name": "奥术学者",
+            "description": "适合把目标拆成卷轴收集、符印修复和知识探索。",
+            "agentName": "Lyra-Archive",
+            "storyTone": "知识探索 / 世界观丰富",
+            "worldSetting": "失落语境之塔正在崩塌，唯有修复词汇符印与阅读回廊才能重启知识核心。",
+            "icon": "sprite--scholar",
+            "startingSkills": [
+              "深度专注成就",
+              "稳定节奏成就"
+            ],
+            "dungeonBaseStats": {
+              "hp": 110,
+              "attack": 20,
+              "defense": 11,
+              "shield": 10
+            }
+          },
+          {
+            "id": "traveler",
+            "name": "荒野旅人",
+            "description": "适合把目标写成旅途事件、遗迹探索和偶遇支线。",
+            "agentName": "Nomad-Delta",
+            "storyTone": "冒险邂逅 / 支线体验强",
+            "worldSetting": "浮空荒野上散落着无数残卷营地，你要在风暴抵达前逐站收集所需线索。",
+            "icon": "sprite--traveler",
+            "startingSkills": [
+              "支线完成成就",
+              "稳定节奏成就"
+            ],
+            "dungeonBaseStats": {
+              "hp": 120,
+              "attack": 24,
+              "defense": 10,
+              "shield": 6
+            }
+          }
+        ]
+      }
+    }
+  ]
+}
