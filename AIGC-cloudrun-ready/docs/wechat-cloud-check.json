@@ -1,9 +1,9 @@
 {
-  "checkedAt": "2026-10-01T11:14:20.301Z",
+  "checkedAt": "2026-10-02T02:17:37.440Z",
   "environment": "cloud1-d2gh7wkxx37588619",
   "service": "aigc-backend",
   "page": {
-    "pageId": 1,
+    "pageId": 3,
     "path": "pages/welcome/index",
     "query": {},
     "route": "/pages/welcome/index",
@@ -17,8 +17,9 @@
         "status": "ok",
         "service": "aigc-backend",
         "environment": "production",
-        "timestamp": "2026-10-01T11:14:23.555Z",
-        "uptimeSeconds": 285
+        "persistence": "cloudbase",
+        "timestamp": "2026-10-02T02:17:37.360Z",
+        "uptimeSeconds": 1519
       }
     },
     {

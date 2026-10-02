@@ -1,4 +1,5 @@
 const { jsonCompletion, getResolvedApiKey } = require("./deepseekService");
+const { AppError } = require("../lib/errors");
 
 function text(value, fallback = "") {
   const result = String(value || "").replace(/\s+/g, " ").trim();
@@ -211,6 +212,7 @@ function normalizePlan(raw, context, source = "llm") {
       + day.sideTasks.reduce((inner, task) => inner + task.estimatedMinutes, 0), 0),
     generatedAt: new Date().toISOString(),
     source,
+    planWarnings: Array.isArray(raw && raw.planWarnings) ? raw.planWarnings : [],
     sourceMode: selectedSourceIds.length ? "SELECTED" : "SKIPPED",
   };
 }
@@ -223,6 +225,8 @@ function validateSourceBoundPlan(plan, context = {}) {
   const sourceById = sourceMap(context.sources || []);
   const budget = clamp(profile.dailyBudgetMinutes, 25, 480, 120);
   const rawDays = Array.isArray(plan && plan.firstWeek) ? plan.firstWeek : [];
+  const expectedDays = Math.min(7, Math.max(1, Number(profile.durationDays) || 30));
+  if (rawDays.length !== expectedDays) issues.push("INCOMPLETE_FIRST_WEEK");
   if (!Array.isArray(normalized.stageGoals) || normalized.stageGoals.length < 2 || normalized.stageGoals.length > 6) issues.push("STAGE_COUNT");
   if (!Array.isArray(normalized.firstWeek) || normalized.firstWeek.length < 1 || normalized.firstWeek.length > 7) issues.push("FIRST_WEEK_COUNT");
   normalized.firstWeek.forEach((day, dayIndex) => {
@@ -240,16 +244,11 @@ function validateSourceBoundPlan(plan, context = {}) {
       const rawSourceId = text(rawTask.sourceRef && rawTask.sourceRef.sourceId);
       const rawTitle = text(rawTask.title);
       const rawDetail = text(rawTask.detail || rawTask.description);
+      if (!rawTitle || !rawDetail) issues.push(`INCOMPLETE_MAIN_DAY_${day.day}_${taskIndex + 1}`);
       if (selectedIds.size && (!rawSourceId || !selectedIds.has(rawSourceId) || !sourceById.has(rawSourceId))) {
         issues.push(`RAW_MAIN_SOURCE_DAY_${day.day}_${taskIndex + 1}`);
       }
-      if (/^(学习一下|继续学习|完成任务|看一看|练习一下|复习)$/i.test(rawTitle)) issues.push(`VAGUE_MAIN_DAY_${day.day}_${taskIndex + 1}`);
-      const source = sourceById.get(rawSourceId);
-      const verifiedLocator = rawTask.sourceRef && rawTask.sourceRef.locatorType !== "URL"
-        && source && (source.structure || []).some((entry) => entry.locatorLabel === text(rawTask.sourceRef.locatorLabel));
-      const hasScope = verifiedLocator || /\d+|章|节|课|页|题|段|模块|单元|章节|要点|结果|问题|练习|操作|lesson|chapter|section|module/i.test(`${rawTitle} ${rawDetail}`);
-      const hasAction = /完成|列出|检查|阅读|观看|练习|编写|实现|整理|总结|分析|复述|记录|解决|制作|搭建|测试|read|watch|write|build|practice|summarize|implement|review/i.test(`${rawTitle} ${rawDetail}`);
-      if (!hasScope || !hasAction) issues.push(`MAIN_NOT_SPECIFIC_DAY_${day.day}_${taskIndex + 1}`);
+      // Task wording is natural language: keyword lists cannot reliably judge quality.
       if (selectedIds.size && (!task.sourceRef || !task.sourceRef.sourceId)) issues.push(`MAIN_SOURCE_DAY_${day.day}_${taskIndex + 1}`);
     });
     [...day.mainTasks, ...day.sideTasks].forEach((task) => {
@@ -262,9 +261,6 @@ function validateSourceBoundPlan(plan, context = {}) {
       }
     });
   });
-  const fingerprints = normalized.firstWeek.flatMap((day) => day.mainTasks)
-    .map((task) => task.title.replace(/[\s「」“”"'，。:：]/g, "").toLowerCase());
-  if (new Set(fingerprints).size !== fingerprints.length) issues.push("DUPLICATE_CORE");
   return { valid: issues.length === 0, issues, plan: normalized };
 }
 
@@ -279,7 +275,12 @@ function repairSourceBoundPlan(plan, context = {}) {
 async function generateSourceBoundPlan(context = {}, options = {}) {
   const fallback = buildFallbackPlan(context);
   const apiKey = getResolvedApiKey(options.apiKey);
-  if (!apiKey) return fallback;
+  if (!apiKey) {
+    if (process.env.NODE_ENV === "production") {
+      throw new AppError("PLAN_AI_UNAVAILABLE", "智能计划服务尚未配置，请联系管理员后重试", 503);
+    }
+    return { ...fallback, planWarnings: ["当前为离线示例计划，未调用 AI。"] };
+  }
   const hasSelectedSources = Array.isArray(context.selectedSourceIds) && context.selectedSourceIds.length > 0;
   try {
     const result = await jsonCompletion([
@@ -306,12 +307,17 @@ async function generateSourceBoundPlan(context = {}, options = {}) {
           adjustment: context.adjustment || "",
         }),
       },
-    ], { apiKey, temperature: 0.45, maxTokens: 3200, timeoutMs: 20000 });
-    const repaired = repairSourceBoundPlan(result, context);
-    if (!repaired.valid) return fallback;
-    return { ...repaired.plan, source: repaired.repairAttempts ? "fallback" : "llm", planWarnings: repaired.repairAttempts ? ["计划未通过全部检查，已使用规则模板修复。"] : [] };
+    ], { apiKey, temperature: 0.45, maxTokens: 6000, timeoutMs: 20000 });
+    const checked = validateSourceBoundPlan(result, context);
+    if (!checked.valid) {
+      console.warn("[planning] AI plan rejected", checked.issues);
+      throw new AppError("PLAN_VALIDATION_FAILED", "生成的计划未满足任务、来源或时间要求，请重新生成；你的目标和资料已保留", 422);
+    }
+    return { ...checked.plan, source: "llm", planWarnings: [] };
   } catch (error) {
-    return fallback;
+    if (error instanceof AppError) throw error;
+    console.warn("[planning] AI generation failed", error && error.name || "Error");
+    throw new AppError("PLAN_AI_UNAVAILABLE", "智能计划生成暂时失败，请稍后重新生成；你的目标和资料已保留", 503);
   }
 }
 

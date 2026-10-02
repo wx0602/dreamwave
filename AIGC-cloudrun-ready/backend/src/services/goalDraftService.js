@@ -145,7 +145,7 @@ async function generatePlanCommand(draftId, payload = {}, options = {}) {
     status: "PLAN_READY",
     planDraft: checked.plan,
     lastAdjustment: text(payload.adjustment),
-    planWarnings: checked.issues || [],
+    planWarnings: [...(plan.planWarnings || []), ...(checked.issues || [])],
   }));
 }
 
