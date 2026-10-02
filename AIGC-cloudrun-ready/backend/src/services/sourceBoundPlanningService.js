@@ -1,4 +1,4 @@
-const { jsonCompletion, getResolvedApiKey } = require("./deepseekService");
+const { getResolvedApiKey } = require("./deepseekService");
 const { AppError } = require("../lib/errors");
 
 function text(value, fallback = "") {
@@ -72,6 +72,7 @@ function allocateDailyMinutes(value) {
   const base = Math.max(5, Math.floor(mainBudget / 3));
   return { budget, main: [base, base, Math.max(5, mainBudget - base * 2)], sideEach };
 }
+
 
 function buildFallbackPlan(context = {}) {
   const profile = context.goalProfile || {};
@@ -281,44 +282,14 @@ async function generateSourceBoundPlan(context = {}, options = {}) {
     }
     return { ...fallback, planWarnings: ["当前为离线示例计划，未调用 AI。"] };
   }
-  const hasSelectedSources = Array.isArray(context.selectedSourceIds) && context.selectedSourceIds.length > 0;
-  try {
-    const result = await jsonCompletion([
-      {
-        role: "system",
-        content: hasSelectedSources
-          ? `你是学习计划教练。只能使用用户已经确认的 sourceId 和其提供的可验证结构，不得新增来源或猜章节。只生成第一周，每天恰好 3 个 mainTasks 和 2 个 sideTasks；三条主线依次承担学习输入、练习执行、输出验证，但标题不得出现这些系统术语。每项任务必须具体、有动作、范围和来源位置。没有可验证目录时 sourceRef.locatorType 必须为 URL，不能猜页码、课时或题号。五项任务总时长不得超过每日预算。不得输出分数、正确率、掌握度或必然效果。只返回 JSON：{"goalTitle":"","stageGoals":[{"stageId":"stage-1","title":"","description":"","startDay":1,"endDay":7,"sourceIds":[]}],"firstWeek":[{"day":1,"mainTasks":[{"title":"","detail":"","estimatedMinutes":25,"sourceRef":{"sourceId":"","locatorType":"CHAPTER|LESSON|SECTION|EXERCISE_SET|URL","locatorLabel":"","locatorUrl":""},"selectionReason":""}],"sideTasks":[{"title":"","detail":"","estimatedMinutes":10,"sourceRef":{"sourceId":"","locatorType":"URL","locatorLabel":"","locatorUrl":""},"selectionReason":""}]}],"weeklyMilestones":[{"week":1,"title":"","outcome":""}]}`
-          : `你是学习计划教练。用户选择暂不绑定学习资料。只根据目标、当前基础、期限和每日时间生成第一周计划，每天恰好 3 个 mainTasks 和 2 个 sideTasks；三条主线依次承担学习输入、练习执行、输出验证，但标题不得出现这些系统术语。任务必须具体、有动作、数量或范围；不得虚构教材、课程、章节、页码、题号、链接或用户已有成果，所有 sourceRef 必须为 null。五项任务总时长不得超过每日预算。不得输出分数、正确率、掌握度或必然效果。只返回 JSON：{"goalTitle":"","stageGoals":[{"stageId":"stage-1","title":"","description":"","startDay":1,"endDay":7,"sourceIds":[]}],"firstWeek":[{"day":1,"mainTasks":[{"title":"","detail":"","estimatedMinutes":25,"sourceRef":null,"selectionReason":""}],"sideTasks":[{"title":"","detail":"","estimatedMinutes":10,"sourceRef":null,"selectionReason":""}]}],"weeklyMilestones":[{"week":1,"title":"","outcome":""}]}`,
-      },
-      {
-        role: "user",
-        content: JSON.stringify({
-          goalProfile: context.goalProfile,
-          selectedSourceIds: context.selectedSourceIds,
-          sources: (context.sources || []).map((source) => ({
-            sourceId: source.sourceId,
-            title: source.title,
-            provider: source.provider,
-            type: source.type,
-            url: source.url,
-            structure: source.structure,
-            outlineStatus: source.outlineStatus,
-          })),
-          adjustment: context.adjustment || "",
-        }),
-      },
-    ], { apiKey, temperature: 0.45, maxTokens: 6000, timeoutMs: 20000 });
-    const checked = validateSourceBoundPlan(result, context);
-    if (!checked.valid) {
-      console.warn("[planning] AI plan rejected", checked.issues);
-      throw new AppError("PLAN_VALIDATION_FAILED", "生成的计划未满足任务、来源或时间要求，请重新生成；你的目标和资料已保留", 422);
-    }
-    return { ...checked.plan, source: "llm", planWarnings: [] };
-  } catch (error) {
-    if (error instanceof AppError) throw error;
-    console.warn("[planning] AI generation failed", error && error.name || "Error");
-    throw new AppError("PLAN_AI_UNAVAILABLE", "智能计划生成暂时失败，请稍后重新生成；你的目标和资料已保留", 503);
+  const { generateStablePlan } = require("./stablePlanAdapter");
+  const result = await generateStablePlan(context, { ...options, apiKey });
+  const checked = validateSourceBoundPlan(result, context);
+  if (!checked.valid) {
+    console.warn("[planning] Stable plan rejected", checked.issues);
+    throw new AppError("PLAN_VALIDATION_FAILED", "计划结构不完整，请重新生成；你的目标和资料已保留", 422);
   }
+  return { ...checked.plan, source: "llm", generator: "stable-63ffb9c", planWarnings: [] };
 }
 
 module.exports = {

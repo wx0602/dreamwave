@@ -10,23 +10,42 @@ plan.firstWeek[0].mainTasks = [
 async function run() {
   assert.deepStrictEqual(validateSourceBoundPlan(plan, context).issues, []);
   const originalFetch = global.fetch;
-  const originalEnv = process.env.NODE_ENV;
+  const stagePlan = { stageGoals: Array.from({length:3}, (_,index) => ({
+    title: '阶段' + (index+1), description:'按目标推进',
+    tasks: plan.firstWeek[0].mainTasks.map(task=>({...task,description:task.detail})),
+  })) };
+  let rolling = { days: plan.firstWeek };
+  let calls = [];
+  global.fetch = async (url, options) => {
+    const body = JSON.parse(options.body);
+    calls.push(body);
+    const isRolling = body.messages[0].content.includes('任务规划师');
+    return new Response(JSON.stringify({choices:[{message:{content:JSON.stringify(isRolling ? rolling : stagePlan)}}]}), {status:200});
+  };
   try {
-    global.fetch = async () => new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(plan) } }] }), { status: 200 });
-    const result = await generateSourceBoundPlan(context, { apiKey: 'test-only-key' });
-    assert.strictEqual(result.source, 'llm');
-    assert.strictEqual(result.firstWeek[0].mainTasks[0].title, '声明与输出变量');
-    const invalid = JSON.parse(JSON.stringify(plan));
-    invalid.firstWeek[0].mainTasks = [];
-    global.fetch = async () => new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(invalid) } }] }), { status: 200 });
-    await assert.rejects(generateSourceBoundPlan(context, { apiKey: 'test-only-key' }), e => e.code === 'PLAN_VALIDATION_FAILED');
+    const result = await generateSourceBoundPlan(context, {apiKey:'test-only-key'});
+    assert.strictEqual(result.source,'llm');
+    assert.strictEqual(result.generator,'stable-63ffb9c');
+    assert.strictEqual(result.firstWeek[0].mainTasks[0].title,'声明与输出变量');
+    assert.strictEqual(calls.length,2,'Stable flow must generate stages then rolling tasks');
+    assert.strictEqual(JSON.parse(calls[1].messages[1].content).phases[0].title,'阶段1');
+    for (const dailyBudgetMinutes of [25, 30, 60]) {
+      const timed = await generateSourceBoundPlan({...context, goalProfile:{...context.goalProfile, title:'练习英语口语', dailyBudgetMinutes}}, {apiKey:'test-only-key'});
+      const tasks = [...timed.firstWeek[0].mainTasks, ...timed.firstWeek[0].sideTasks];
+      assert(tasks.reduce((sum, task)=>sum+task.estimatedMinutes,0) <= dailyBudgetMinutes);
+      assert(tasks.every(task=>Number.isInteger(task.estimatedMinutes) && task.estimatedMinutes >= 5));
+      assert.strictEqual(timed.firstWeek[0].mainTasks[0].detail,plan.firstWeek[0].mainTasks[0].detail);
+    }
+    const selected = await generateSourceBoundPlan({...context,
+      selectedSourceIds:['book'], sources:[{sourceId:'book',title:'用户资料',url:'https://example.test/book'}],
+    }, {apiKey:'test-only-key'});
+    assert.strictEqual(selected.firstWeek[0].mainTasks[0].sourceRef.sourceId,'book');
+    assert.strictEqual(selected.firstWeek[0].mainTasks[0].sourceRef.locatorType,'URL');
+    rolling = {days:[]};
+    await assert.rejects(generateSourceBoundPlan(context,{apiKey:'test-only-key'}),e=>e.code==='PLAN_AI_UNAVAILABLE');
     global.fetch = async () => { throw new Error('network unavailable'); };
-    await assert.rejects(generateSourceBoundPlan(context, { apiKey: 'test-only-key' }), e => e.code === 'PLAN_AI_UNAVAILABLE');
-    console.log('Plan quality regression passed: concrete actions retained; invalid or failed AI output never silently becomes a template.');
-  } finally {
-    global.fetch = originalFetch;
-    if (originalEnv === undefined) delete process.env.NODE_ENV;
-    else process.env.NODE_ENV = originalEnv;
-  }
+    await assert.rejects(generateSourceBoundPlan(context,{apiKey:'test-only-key'}),e=>e.code==='PLAN_AI_UNAVAILABLE');
+    console.log('Stable planner adapter regression passed: stage-to-rolling flow, source references, retained tasks and explicit failure.');
+  } finally { global.fetch = originalFetch; }
 }
-run().catch(e => { console.error(e); process.exitCode = 1; });
+run().catch(e=>{console.error(e);process.exitCode=1;});
