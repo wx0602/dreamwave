@@ -32,6 +32,6 @@
     "test:task-summary": "node backend/tests/task-summary.test.js",
     "test:dungeon-daily": "node backend/tests/dungeon-daily.test.js",
     "test:regression": "npm run check && npm run test:daily-plan && npm run test:star-map && npm run test:goal-guard && npm run test:goal-portfolio && npm run test:portfolio-planning && npm run test:goal-draft-flow && npm run test:learning-source-search && npm run test:daily-portfolio-v4 && npm run test:session-v9-migration && npm run test:task-summary && npm run test:dungeon-daily && npm run test:multi-user && npm run smoke:miniprogram-api",
-    "test": "npm run test:regression && node backend/tests/plan-quality.test.js"
+    "test": "npm run test:regression && node backend/tests/plan-quality.test.js && node backend/tests/plan-jobs.test.js"
   }
 }

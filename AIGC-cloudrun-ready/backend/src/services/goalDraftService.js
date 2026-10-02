@@ -72,6 +72,7 @@ async function searchSourcesCommand(draftId, payload = {}, options = {}) {
       selectedSourceIds: [],
       planDraft: null,
       planWarnings: result.warnings || [],
+      planGeneration: null,
       searchMode: result.searchMode,
     }));
   } catch (error) {
@@ -86,6 +87,7 @@ async function searchSourcesCommand(draftId, payload = {}, options = {}) {
       selectedSourceIds: [],
       planDraft: null,
       planWarnings: ["暂时没有找到合适资料，可以跳过这一步直接生成计划。"],
+      planGeneration: null,
       searchMode: "NO_RELIABLE_SOURCE",
     }));
   }
@@ -93,7 +95,7 @@ async function searchSourcesCommand(draftId, payload = {}, options = {}) {
 
 function selectSourcesCommand(draftId, payload = {}) {
   const current = getGoalDraft(draftId);
-  if (current.status !== "SOURCES_READY" && current.status !== "SOURCE_SELECTED" && current.status !== "PLAN_READY") {
+  if (current.status !== "SOURCES_READY" && current.status !== "SOURCE_SELECTED" && current.status !== "SOURCE_SKIPPED" && current.status !== "PLAN_READY") {
     throw new AppError("INVALID_DRAFT_STATE", "请先完成来源搜索", 409);
   }
   if (payload.skip === true) {
@@ -104,6 +106,7 @@ function selectSourcesCommand(draftId, payload = {}) {
       selectedSourceIds: [],
       planDraft: null,
       planWarnings: ["本次未绑定学习资料，任务不会引用未经确认的章节或链接。"],
+      planGeneration: null,
     }));
   }
   const bundleId = text(payload.bundleId);
@@ -113,6 +116,7 @@ function selectSourcesCommand(draftId, payload = {}) {
     ...draft,
     status: "SOURCE_SELECTED",
     selectedBundleId: bundle.bundleId,
+    planGeneration: null,
     selectedSourceIds: [...bundle.sourceIds],
     planDraft: null,
     planWarnings: [],

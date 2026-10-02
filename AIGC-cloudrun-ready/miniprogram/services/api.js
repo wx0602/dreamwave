@@ -115,6 +115,40 @@ async function request(path, method = "GET", data) {
   }
 }
 
+async function generateGoalPlan(draftId, payload) {
+  const path = `${ROUTES.goalDrafts}/${encodeURIComponent(draftId)}`;
+  const started = Date.now();
+  let draft = await request(path);
+  try {
+    if (!draft.planGeneration || draft.planGeneration.status !== "RUNNING") {
+      draft = await request(`${path}/plan-generations`, "POST", { ...payload, expectedRevision: draft.revision, async: true });
+    }
+  } catch (error) {
+    // An interrupted response may still have queued the job. Recover rather than submit twice.
+    if (!/102002|timeout|超时/i.test(error.message) && error.code !== "DRAFT_REVISION_CONFLICT") throw error;
+    draft = await request(path);
+    if (!draft.planGeneration) throw error;
+  }
+  let transientFailures = 0;
+  while (Date.now() - started < 310000) {
+    if (draft.planGeneration && draft.planGeneration.status === "FAILED") {
+      throw new Error(draft.planGeneration.message || "任务生成失败，请重试");
+    }
+    if (draft.status === "PLAN_READY" && draft.planDraft) return draft;
+    if (!draft.planGeneration || draft.planGeneration.status !== "RUNNING") {
+      throw new Error("草稿已更新，请返回并重新打开计划页面");
+    }
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    try {
+      draft = await request(path);
+      transientFailures = 0;
+    } catch (error) {
+      if (!/102002|timeout|超时|网络/i.test(error.message) || ++transientFailures > 3) throw error;
+    }
+  }
+  throw new Error("生成等待超时，请重新打开计划页面查看结果；目标和资料已保留");
+}
+
 module.exports = {
   listRoles: () => request(ROUTES.roles),
   createSession: (payload) => request(ROUTES.sessions, "POST", payload),
@@ -138,11 +172,7 @@ module.exports = {
     "POST",
     payload
   ),
-  generateGoalPlan: (draftId, payload) => request(
-    `${ROUTES.goalDrafts}/${encodeURIComponent(draftId)}/plan-generations`,
-    "POST",
-    payload
-  ),
+  generateGoalPlan,
   confirmGoalDraft: (draftId, payload) => request(
     `${ROUTES.goalDrafts}/${encodeURIComponent(draftId)}/confirmations`,
     "POST",

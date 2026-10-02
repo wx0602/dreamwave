@@ -331,6 +331,11 @@ function buildGoalDraftDto(draft) {
     selectedBundleId: cleanText(value.selectedBundleId),
     selectedSourceIds: Array.isArray(value.selectedSourceIds) ? value.selectedSourceIds.map(cleanText).filter(Boolean) : [],
     sourceSelectionSkipped: value.selectedBundleId === "SKIPPED",
+    planGeneration: value.planGeneration ? {
+      jobId: cleanText(value.planGeneration.jobId),
+      status: value.planGeneration.status === "RUNNING" && Date.parse(value.planGeneration.expiresAt) <= Date.now() ? "FAILED" : cleanText(value.planGeneration.status),
+      message: value.planGeneration.status === "RUNNING" && Date.parse(value.planGeneration.expiresAt) <= Date.now() ? "生成已中断，请重新生成；目标和资料已保留" : cleanText(value.planGeneration.message),
+    } : null,
     planDraft: buildSourceBoundPlanDto(value.planDraft),
     planWarnings: Array.isArray(value.planWarnings) ? value.planWarnings.map(cleanText).filter(Boolean) : [],
     searchMode: cleanText(value.searchMode),

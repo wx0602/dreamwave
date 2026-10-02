@@ -36,6 +36,7 @@ const { initializeRuntime } = require("./store/sessionStore");
 const { createAuthSession } = require("./store/accountStore");
 const { getRequestContext } = require("./context/requestContext");
 const { executeRequest, initializePersistence, closePersistence } = require("./store/requestPersistence");
+const { preparePlanGenerationJob } = require("./services/planGenerationJobService");
 const {
   getCurrentSessionState,
   loginSession,
@@ -112,7 +113,13 @@ async function handleApiRequest(req, url) {
     } else if (action === "source-selections") {
       draft = selectSourcesCommand(draftId, body);
     } else if (action === "plan-generations") {
-      draft = await generatePlanCommand(draftId, body);
+      if (body.async === true) {
+        const job = preparePlanGenerationJob(req, draftId, body);
+        draft = job.draft;
+        req.runPlanJob = job.run;
+      } else {
+        draft = await generatePlanCommand(draftId, body);
+      }
     } else {
       const receipt = findConfirmationReceipt(draftId, body.confirmationKey);
       if (receipt && receipt.event) {
@@ -272,6 +279,9 @@ function createServer() {
       }
       const result = await executeRequest(req, requestOptions(pathname, req.method), () => handleApiRequest(req, url));
       json(res, result.statusCode, result.payload);
+      if (req.runPlanJob) {
+        setImmediate(() => req.runPlanJob().catch(error => console.warn('[planning] job save failed', error.name)));
+      }
     } catch (error) {
       const statusCode = Number(error && error.statusCode) || 400;
       json(res, statusCode, buildErrorResponse(
