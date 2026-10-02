@@ -40,8 +40,8 @@ const mysqlHost = String(process.env.MYSQL_HOST || "").trim();
 const requestedPersistence = String(process.env.PERSISTENCE_DRIVER || "").trim().toLowerCase();
 const persistenceDriver = requestedPersistence || (mysqlUrl || mysqlHost ? "mysql" : "file");
 
-if (!['file', 'mysql'].includes(persistenceDriver)) {
-  throw new Error(`PERSISTENCE_DRIVER must be file or mysql; received: ${persistenceDriver}`);
+if (!['file', 'mysql', 'cloudbase'].includes(persistenceDriver)) {
+  throw new Error(`PERSISTENCE_DRIVER must be file, mysql, or cloudbase; received: ${persistenceDriver}`);
 }
 
 module.exports = {
@@ -61,7 +61,11 @@ module.exports = {
   persistence: {
     driver: persistenceDriver,
     isMysql: persistenceDriver === "mysql",
+    isCloudbase: persistenceDriver === "cloudbase",
     requireShared: envFlag(process.env.REQUIRE_SHARED_PERSISTENCE, false),
+  },
+  cloudbase: {
+    envId: String(process.env.CLOUDBASE_ENV_ID || process.env.TCB_ENV || "cloud1-d2gh7wkxx37588619").trim(),
   },
   mysql: {
     url: mysqlUrl,

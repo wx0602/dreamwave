@@ -7,6 +7,14 @@ const { AppError } = require("../lib/errors");
 const { clone } = require("../utils/clone");
 const { runWithRequestContext, requireRequestContext } = require("../context/requestContext");
 const { getPool, initializeMysql, closeMysql } = require("./mysqlDatabase");
+const {
+  COLLECTIONS,
+  getDocument,
+  setDocument,
+  updateDocument,
+  initializeCloudbase,
+  closeCloudbase,
+} = require("./cloudbaseDatabase");
 
 let fileRequestTail = Promise.resolve();
 
@@ -80,6 +88,15 @@ function resolveFileSession(rawToken) {
   return session ? String(session.userId) : null;
 }
 
+async function resolveCloudbaseSession(rawToken) {
+  if (!rawToken) return null;
+  const hash = tokenHash(rawToken);
+  const session = await getDocument(COLLECTIONS.sessions, hash);
+  if (!session || new Date(session.expiresAt).getTime() <= Date.now()) return null;
+  await updateDocument(COLLECTIONS.sessions, hash, { lastSeenAt: new Date().toISOString() });
+  return String(session.userId);
+}
+
 async function loadMysqlUserState(context, userId, required = true) {
   const [rows] = await context.connection.execute(
     "SELECT version, state_json AS stateJson, api_key AS apiKey FROM aigc_user_states WHERE user_id = ? FOR UPDATE",
@@ -114,6 +131,21 @@ function loadFileUserState(context, userId, required = true) {
   return context.state;
 }
 
+async function loadCloudbaseUserState(context, userId, required = true) {
+  const snapshot = await getDocument(COLLECTIONS.states, userId);
+  if (!snapshot || !snapshot.state) {
+    if (required) throw new AppError("SESSION_NOT_INITIALIZED", "账号尚未完成初始化", 401);
+    context.userId = userId;
+    context.stateVersion = 0;
+    return null;
+  }
+  context.userId = userId;
+  context.stateVersion = Number(snapshot.version) || 1;
+  context.state = clone(snapshot.state);
+  context.apiKey = String(snapshot.apiKey || "");
+  return context.state;
+}
+
 async function bindUserToRequest(userId, options = {}) {
   const context = requireRequestContext();
   const normalized = String(userId || "").trim();
@@ -127,6 +159,7 @@ async function bindUserToRequest(userId, options = {}) {
     return context.state;
   }
   if (context.mode === "mysql") return loadMysqlUserState(context, normalized, options.required !== false);
+  if (context.mode === "cloudbase") return loadCloudbaseUserState(context, normalized, options.required !== false);
   return loadFileUserState(context, normalized, options.required !== false);
 }
 
@@ -161,6 +194,18 @@ function loadFileDraft(context, draftId) {
   context.draftStore.drafts.push(clone(draft));
   context.loadedDraftIds.add(draftId);
   context.draftOwners.set(draftId, row);
+}
+
+async function loadCloudbaseDraft(context, draftId) {
+  const row = await getDocument(COLLECTIONS.drafts, draftId);
+  if (!row) return;
+  authorizeDraft(context, row);
+  if (row.draft) context.draftStore.drafts.push(clone(row.draft));
+  context.loadedDraftIds.add(draftId);
+  context.draftOwners.set(draftId, {
+    ownerUserId: row.ownerUserId ? String(row.ownerUserId) : null,
+    ownerClientId: String(row.ownerClientId || ""),
+  });
 }
 
 function authorizeDraft(context, row) {
@@ -245,10 +290,36 @@ function flushFile(context) {
   }
 }
 
+async function flushCloudbase(context) {
+  if (context.userId && context.stateDirty) {
+    context.stateVersion = (Number(context.stateVersion) || 0) + 1;
+    await setDocument(COLLECTIONS.states, context.userId, {
+      userId: context.userId,
+      version: context.stateVersion,
+      apiKey: context.apiKey || "",
+      savedAt: new Date().toISOString(),
+      state: context.state,
+    });
+  }
+  if (context.draftsDirty) {
+    for (const draft of context.draftStore.drafts) {
+      const existing = context.draftOwners.get(draft.draftId) || {};
+      await setDocument(COLLECTIONS.drafts, draft.draftId, {
+        ownerUserId: context.userId || existing.ownerUserId || null,
+        ownerClientId: existing.ownerClientId || context.clientId,
+        revision: Number(draft.revision) || 1,
+        status: String(draft.status || "CREATED"),
+        expiresAt: draft.expiresAt,
+        draft,
+      });
+    }
+  }
+}
+
 function baseContext(req) {
   const identity = clientIdentity(req);
   return {
-    mode: env.persistence.isMysql ? "mysql" : "file",
+    mode: env.persistence.driver,
     connection: null,
     userId: null,
     clientId: identity.clientId,
@@ -297,6 +368,17 @@ async function executeFileRequest(req, options, action) {
   return result;
 }
 
+async function executeCloudbaseRequest(req, options, action) {
+  const context = baseContext(req);
+  const resolvedUserId = await resolveCloudbaseSession(bearerToken(req));
+  if (resolvedUserId) await loadCloudbaseUserState(context, resolvedUserId, true);
+  if (options.authRequired && !context.userId) throw new AppError("AUTH_REQUIRED", "登录状态已失效，请重新登录", 401);
+  if (options.draftId) await loadCloudbaseDraft(context, options.draftId);
+  const result = await runWithRequestContext(context, action);
+  await flushCloudbase(context);
+  return result;
+}
+
 async function executeRequest(req, options, action) {
   if (env.persistence.isMysql) return executeMysqlRequest(req, options || {}, action);
   const previous = fileRequestTail;
@@ -304,6 +386,7 @@ async function executeRequest(req, options, action) {
   fileRequestTail = new Promise((resolve) => { release = resolve; });
   await previous;
   try {
+    if (env.persistence.isCloudbase) return await executeCloudbaseRequest(req, options || {}, action);
     return await executeFileRequest(req, options || {}, action);
   } finally {
     release();
@@ -311,16 +394,22 @@ async function executeRequest(req, options, action) {
 }
 
 async function initializePersistence() {
-  if (env.persistence.requireShared && !env.persistence.isMysql) {
-    throw new Error("生产环境要求共享持久化：请配置 PERSISTENCE_DRIVER=mysql 和 MYSQL_URL");
+  if (env.persistence.requireShared && !env.persistence.isMysql && !env.persistence.isCloudbase) {
+    throw new Error("生产环境要求共享持久化：请配置 PERSISTENCE_DRIVER=mysql 或 cloudbase");
   }
   await initializeMysql();
+  await initializeCloudbase();
+}
+
+async function closePersistence() {
+  await closeMysql();
+  closeCloudbase();
 }
 
 module.exports = {
   tokenHash,
   executeRequest,
   initializePersistence,
-  closePersistence: closeMysql,
+  closePersistence,
   bindUserToRequest,
 };

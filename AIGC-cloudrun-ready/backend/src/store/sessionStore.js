@@ -372,7 +372,7 @@ function initializeFreshRuntime() {
 }
 
 function initializeRuntime() {
-  if (env.persistence.isMysql) {
+  if (env.persistence.isMysql || env.persistence.isCloudbase) {
     ensureRuntimeDir();
     return null;
   }

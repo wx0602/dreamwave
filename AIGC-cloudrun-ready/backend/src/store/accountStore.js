@@ -6,6 +6,7 @@ const env = require("../config/env");
 const { AppError } = require("../lib/errors");
 const { getRequestContext } = require("../context/requestContext");
 const { tokenHash } = require("./requestPersistence");
+const { COLLECTIONS, getDocument, setDocument, updateDocument } = require("./cloudbaseDatabase");
 
 function ensureAccountRuntimeDir() {
   fs.mkdirSync(env.runtimeDir, { recursive: true });
@@ -52,6 +53,10 @@ function createUserId() {
   return `user-${Date.now()}-${crypto.randomBytes(4).toString("hex")}`;
 }
 
+function accountDocumentId(account) {
+  return crypto.createHash("sha256").update(normalizeAccount(account), "utf8").digest("hex");
+}
+
 function getAccountByName(account) {
   const normalized = normalizeAccount(account);
   if (!normalized) {
@@ -75,6 +80,12 @@ async function assertAccountAvailable(account) {
       [normalized]
     );
     if (rows.length) throw new AppError("ACCOUNT_EXISTS", "该账号已存在，请直接登录", 409);
+    return;
+  }
+  if (context && context.mode === "cloudbase") {
+    if (await getDocument(COLLECTIONS.accounts, accountDocumentId(normalized))) {
+      throw new AppError("ACCOUNT_EXISTS", "该账号已存在，请直接登录", 409);
+    }
     return;
   }
 
@@ -118,6 +129,24 @@ async function registerAccount({ account, password, nickname }) {
       createdAt: new Date().toISOString(),
       lastLoginAt: new Date().toISOString(),
     };
+  }
+  if (context && context.mode === "cloudbase") {
+    const userId = createUserId();
+    const salt = crypto.randomBytes(16).toString("hex");
+    const now = new Date().toISOString();
+    const accountRecord = {
+      userId,
+      account: normalized,
+      nickname: String(nickname || "").trim(),
+      passwordHash: scryptPassword(trimmedPassword, salt),
+      passwordSalt: salt,
+      passwordScheme: "scrypt-v1",
+      createdAt: now,
+      lastLoginAt: now,
+    };
+    await setDocument(COLLECTIONS.accounts, accountDocumentId(normalized), accountRecord);
+    context.accountDocumentId = accountDocumentId(normalized);
+    return accountRecord;
   }
 
   const store = loadAccountStore();
@@ -168,6 +197,17 @@ async function authenticateAccount(account, password) {
     if (!matches) throw new AppError("AUTH_INVALID", "账号或密码错误", 401);
     return accountRecord;
   }
+  if (context && context.mode === "cloudbase") {
+    const documentId = accountDocumentId(normalized);
+    const accountRecord = await getDocument(COLLECTIONS.accounts, documentId);
+    if (!accountRecord) throw new AppError("AUTH_INVALID", "账号或密码错误", 401);
+    const actual = scryptPassword(trimmedPassword, accountRecord.passwordSalt);
+    const expected = String(accountRecord.passwordHash || "");
+    const matches = actual.length === expected.length && crypto.timingSafeEqual(Buffer.from(actual), Buffer.from(expected));
+    if (!matches) throw new AppError("AUTH_INVALID", "账号或密码错误", 401);
+    context.accountDocumentId = documentId;
+    return accountRecord;
+  }
 
   const accountRecord = getAccountByName(normalized);
   if (!accountRecord) {
@@ -188,6 +228,12 @@ async function updateLastLoginAt(userId) {
       "UPDATE aigc_accounts SET last_login_at = CURRENT_TIMESTAMP(3) WHERE user_id = ?",
       [userId]
     );
+    return;
+  }
+  if (context && context.mode === "cloudbase") {
+    if (context.accountDocumentId) {
+      await updateDocument(COLLECTIONS.accounts, context.accountDocumentId, { lastLoginAt: new Date().toISOString() });
+    }
     return;
   }
   const store = loadAccountStore();
@@ -240,6 +286,10 @@ async function loadAccountSnapshot(userId) {
       state: typeof row.stateJson === "string" ? JSON.parse(row.stateJson) : row.stateJson,
     };
   }
+  if (context && context.mode === "cloudbase") {
+    const row = await getDocument(COLLECTIONS.states, userId);
+    return row && row.state ? row : null;
+  }
 
   const snapshotPath = getAccountSnapshotPath(userId);
   if (!fs.existsSync(snapshotPath)) {
@@ -258,6 +308,15 @@ async function createAuthSession(userId) {
       "INSERT INTO aigc_auth_sessions (token_hash, user_id, expires_at) VALUES (?, ?, ?)",
       [tokenHash(rawToken), userId, expiresAt]
     );
+    return rawToken;
+  }
+  if (context && context.mode === "cloudbase") {
+    await setDocument(COLLECTIONS.sessions, tokenHash(rawToken), {
+      userId,
+      expiresAt: expiresAt.toISOString(),
+      createdAt: new Date().toISOString(),
+      lastSeenAt: new Date().toISOString(),
+    });
     return rawToken;
   }
   ensureAccountRuntimeDir();

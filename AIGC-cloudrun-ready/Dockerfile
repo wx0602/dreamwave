@@ -5,6 +5,7 @@ RUN apk add --no-cache tzdata
 ENV NODE_ENV=production \
     HOST=0.0.0.0 \
     PORT=3001 \
+    PERSISTENCE_DRIVER=cloudbase \
     REQUIRE_SHARED_PERSISTENCE=true \
     TZ=Asia/Shanghai
 
